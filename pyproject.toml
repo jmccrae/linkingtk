@@ -1,0 +1,53 @@
+[project]
+name = "linkingtk"
+version = "0.1.0"
+description = "A toolkit unifying Entity Alignment, Entity Linking, Word Sense Disambiguation and Word Sense Alignment."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "transformers>=4.40",
+    "datasets>=2.19",
+    "peft>=0.11",
+]
+
+[project.optional-dependencies]
+graph = ["networkx>=3.0", "rdflib>=7.0"]
+nlp = ["spacy>=3.7"]
+kge = ["pykeen>=1.10"]
+all = ["linkingtk[graph,nlp,kge]"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/linkingtk"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["linkingtk"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["networkx.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
