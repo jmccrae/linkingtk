@@ -28,3 +28,12 @@ class Entity:
     description: str | LabelWithLang | None = None
     context: str | ContextWithSpan | None = None
     properties: dict[str, str] = field(default_factory=dict)
+
+
+def label_texts(entity: Entity) -> list[str]:
+    """Extract the plain text of each of an entity's labels.
+
+    Language tags are dropped; duplicates are preserved so callers can
+    weight by how often a label occurs.
+    """
+    return [label[0] if isinstance(label, tuple) else label for label in entity.labels]

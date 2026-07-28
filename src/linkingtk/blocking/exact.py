@@ -5,15 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from linkingtk.blocking.base import BlockingStrategy
-from linkingtk.core.entity import Entity
-
-
-def _label_texts(entity: Entity) -> set[str]:
-    """Extract the plain text of each label, ignoring language tags."""
-    texts = set()
-    for label in entity.labels:
-        texts.add(label[0] if isinstance(label, tuple) else label)
-    return texts
+from linkingtk.core.entity import Entity, label_texts
 
 
 class ExactMatch(BlockingStrategy):
@@ -29,13 +21,13 @@ class ExactMatch(BlockingStrategy):
     ) -> list[tuple[Entity, Entity]]:
         index: dict[str, list[Entity]] = defaultdict(list)
         for entity in dataset2:
-            for text in _label_texts(entity):
+            for text in set(label_texts(entity)):
                 index[text].append(entity)
 
         pairs: list[tuple[Entity, Entity]] = []
         for entity1 in dataset1:
             seen: set[str] = set()
-            for text in _label_texts(entity1):
+            for text in set(label_texts(entity1)):
                 for entity2 in index.get(text, []):
                     if entity2.id not in seen:
                         pairs.append((entity1, entity2))
