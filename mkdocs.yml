@@ -1,0 +1,59 @@
+site_name: LinkingTK
+site_description: A toolkit unifying Entity Alignment, Entity Linking, Word Sense Disambiguation and Word Sense Alignment.
+site_url: https://john.mccr.ae/linkingtk/
+repo_url: https://github.com/jmccrae/linkingtk
+repo_name: jmccrae/linkingtk
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - API Reference:
+      - Core: reference/core.md
+      - Blocking: reference/blocking.md
+      - Algorithms: reference/algorithms.md
+      - Datasets: reference/datasets.md
+      - Utils: reference/utils.md
+      - Training: reference/train.md
+      - Evaluation: reference/eval.md
+      - Exceptions: reference/exceptions.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            merge_init_into_class: true
+            separate_signature: true
+            show_signature_annotations: true
+            show_if_no_docstring: false
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - toc:
+      permalink: true

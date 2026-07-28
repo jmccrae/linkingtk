@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+site/
 uv.lock.bak
 .coverage
 htmlcov/

@@ -10,7 +10,8 @@ interface:
 
 See [`DESIGN.md`](./DESIGN.md) for the full design rationale, the `Entity`
 and `BaseLinker` interfaces, dataset references, and the algorithm survey
-for each task.
+for each task. The generated API reference is published at
+[john.mccr.ae/linkingtk](https://john.mccr.ae/linkingtk/).
 
 ## Project layout
 
@@ -44,3 +45,14 @@ uv run ruff check .
 uv run ruff format .
 uv run mypy --strict src/linkingtk
 ```
+
+## Docs
+
+```bash
+uv sync --group docs
+uv run mkdocs serve   # live preview at http://127.0.0.1:8000
+uv run mkdocs build --strict
+```
+
+Docs are built and deployed to GitHub Pages automatically on every push to
+`main` (see `.github/workflows/docs.yml`).
