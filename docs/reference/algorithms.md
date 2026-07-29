@@ -2,6 +2,10 @@
 
 ::: linkingtk.algorithms.base
 
+## String-similarity baseline
+
+::: linkingtk.algorithms.string_similarity
+
 ## Entity Alignment
 
 ::: linkingtk.algorithms.ea
