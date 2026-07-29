@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns="http://right#"
+  xml:base="http://right">
+  <owl:Ontology rdf:about=""/>
+  <owl:Class rdf:ID="Person">
+    <rdfs:label>Person</rdfs:label>
+  </owl:Class>
+  <owl:Class rdf:ID="Document">
+    <rdfs:label>Document</rdfs:label>
+  </owl:Class>
+  <owl:Class rdf:ID="ProgramCommittee">
+    <rdfs:label>Program Committee</rdfs:label>
+  </owl:Class>
+  <owl:ObjectProperty rdf:ID="reviews">
+    <rdfs:label>reviews</rdfs:label>
+  </owl:ObjectProperty>
+</rdf:RDF>

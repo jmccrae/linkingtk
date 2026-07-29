@@ -1,0 +1,5 @@
+<http://left#Person> <http://www.w3.org/2004/02/skos/core#exactMatch> <http://right#Person> . # 1.0
+<http://left#Paper> <http://www.w3.org/2004/02/skos/core#exactMatch> <http://right#Document> . # 1.0
+<http://left#Program_Committee> <http://www.w3.org/2004/02/skos/core#exactMatch> <http://right#ProgramCommittee> . # 1.0
+<http://left#hasReview> <http://www.w3.org/2004/02/skos/core#exactMatch> <http://right#reviews> . # 1.0
+<http://left#Person> <http://www.w3.org/2004/02/skos/core#exactMatch> <http://right#NonExistent> . # 0.5
