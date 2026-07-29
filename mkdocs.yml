@@ -24,6 +24,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Examples: examples.md
   - API Reference:
       - Core: reference/core.md
       - Blocking: reference/blocking.md
@@ -55,5 +56,8 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
   - toc:
       permalink: true
