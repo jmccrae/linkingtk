@@ -25,6 +25,7 @@ theme:
 nav:
   - Home: index.md
   - Examples: examples.md
+  - Datasets: datasets.md
   - API Reference:
       - Core: reference/core.md
       - Blocking: reference/blocking.md
