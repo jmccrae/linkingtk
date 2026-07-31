@@ -14,6 +14,88 @@ from linkingtk.core.entity import Entity
 from linkingtk.datasets.base import DatasetLoader
 
 
+class ToyEADataset(DatasetLoader):
+    """Three same-city entities across two knowledge graphs (6 entities).
+
+    ``kg2``'s labels append the country name (e.g. ``"Paris, France"``), so
+    an exact label match misses every pair — a blocking strategy tolerant
+    of partial overlap (e.g. `~linkingtk.blocking.label_overlap.LabelOverlap`)
+    is needed to find the candidates.
+    """
+
+    def load(self) -> tuple[list[Entity], list[Entity], list[tuple[str, str]]]:
+        kg1 = [
+            Entity(id="kg1:paris", labels=["Paris"]),
+            Entity(id="kg1:berlin", labels=["Berlin"]),
+            Entity(id="kg1:rome", labels=["Rome"]),
+        ]
+        kg2 = [
+            Entity(id="kg2:paris", labels=["Paris, France"]),
+            Entity(id="kg2:berlin", labels=["Berlin, Germany"]),
+            Entity(id="kg2:rome", labels=["Rome, Italy"]),
+        ]
+        ground_truth = [
+            ("kg1:paris", "kg2:paris"),
+            ("kg1:berlin", "kg2:berlin"),
+            ("kg1:rome", "kg2:rome"),
+        ]
+        return kg1, kg2, ground_truth
+
+
+class ToyWSADataset(DatasetLoader):
+    """Four ambiguous-word senses across two differently-worded dictionaries (8 entities).
+
+    Each dictionary glosses the same four senses of *"mouse"* and *"bat"*
+    in different words, so a context-blind baseline would score no better
+    than chance between the two same-label candidates.
+    """
+
+    def load(self) -> tuple[list[Entity], list[Entity], list[tuple[str, str]]]:
+        dict1 = [
+            Entity(
+                id="d1:mouse.1", labels=["mouse"], description="a small rodent with a long tail"
+            ),
+            Entity(
+                id="d1:mouse.2",
+                labels=["mouse"],
+                description="a handheld pointing device for a computer",
+            ),
+            Entity(
+                id="d1:bat.1", labels=["bat"], description="a flying mammal that is active at night"
+            ),
+            Entity(
+                id="d1:bat.2",
+                labels=["bat"],
+                description="a piece of sports equipment used to hit a ball",
+            ),
+        ]
+        dict2 = [
+            Entity(
+                id="d2:mouse.a",
+                labels=["mouse"],
+                description="small furry rodent, often a household pest",
+            ),
+            Entity(
+                id="d2:mouse.b",
+                labels=["mouse"],
+                description="computer input device you move by hand",
+            ),
+            Entity(id="d2:bat.a", labels=["bat"], description="nocturnal flying mammal"),
+            Entity(
+                id="d2:bat.b",
+                labels=["bat"],
+                description="wooden club used to strike a ball in cricket or baseball",
+            ),
+        ]
+        ground_truth = [
+            ("d1:mouse.1", "d2:mouse.a"),
+            ("d1:mouse.2", "d2:mouse.b"),
+            ("d1:bat.1", "d2:bat.a"),
+            ("d1:bat.2", "d2:bat.b"),
+        ]
+        return dict1, dict2, ground_truth
+
+
 class ToyWSDDataset(DatasetLoader):
     """Four ambiguous-word mentions against two senses apiece (12 entities).
 

@@ -31,10 +31,10 @@ Metrics: {'precision@1': 1.0, 'recall': 1.0, 'f1': 1.0}
 
 ## Entity Alignment with StringSimilarityLinker
 
-This aligns two small knowledge graphs describing the same three cities,
-but `kg2`'s labels append the country name (`"Paris"` vs.
-`"Paris, France"`), so an exact label match would miss every pair.
-[`LabelOverlap`](reference/blocking.md) blocking (character n-gram
+This aligns two small knowledge graphs from [`ToyEADataset`](datasets.md#toy-datasets)
+describing the same three cities, but `kg2`'s labels append the country name
+(`"Paris"` vs. `"Paris, France"`), so an exact label match would miss every
+pair. [`LabelOverlap`](reference/blocking.md) blocking (character n-gram
 overlap) finds the candidates despite the mismatch, and
 [`StringSimilarityLinker`](reference/algorithms.md) picks the best one per
 source entity by Jaccard token overlap on the `label` field.
@@ -83,4 +83,29 @@ uv run python examples/basic_exact_match.py
 Candidate pairs: [('s1', 't1')]
 Metrics: {'precision@1': 1.0, 'recall': 0.5, 'f1': 0.6666666666666666}
 Blocking metrics: {'pair_completeness': 0.5, 'reduction_ratio': 0.75}
+```
+
+## MVP milestone acceptance demo
+
+This is the MVP milestone's acceptance demo: the same `StringSimilarityLinker`
+baseline (`LeskLinker` is a preconfigured instance of it) run against a
+[bundled toy dataset](datasets.md#toy-datasets) for each of the four tasks —
+Entity Alignment, Entity Linking, Word Sense Disambiguation and Word Sense
+Alignment — each scored with [`Evaluator.evaluate`](reference/eval.md).
+
+```python
+--8<-- "examples/mvp_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/mvp_benchmark.py
+```
+
+```text
+EA: {'precision@1': 1.0, 'recall': 1.0, 'f1': 1.0}
+EL: {'precision@1': 1.0, 'recall': 1.0, 'f1': 1.0}
+WSD: {'precision@1': 1.0, 'recall': 1.0, 'f1': 1.0}
+WSA: {'precision@1': 1.0, 'recall': 1.0, 'f1': 1.0}
 ```

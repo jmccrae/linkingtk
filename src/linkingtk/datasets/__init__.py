@@ -8,12 +8,14 @@ Datasets section for the full list and sources.
 
 from linkingtk.datasets.base import DatasetLoader
 from linkingtk.datasets.naisc import AnatomyDataset, ConferenceDataset
-from linkingtk.datasets.toy import ToyELDataset, ToyWSDDataset
+from linkingtk.datasets.toy import ToyEADataset, ToyELDataset, ToyWSADataset, ToyWSDDataset
 
 __all__ = [
     "DatasetLoader",
     "ConferenceDataset",
     "AnatomyDataset",
+    "ToyEADataset",
     "ToyWSDDataset",
     "ToyELDataset",
+    "ToyWSADataset",
 ]
