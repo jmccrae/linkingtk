@@ -70,3 +70,39 @@ class Evaluator:
         metrics = {f"Hits@{k}": hits[k] / total for k in top_k}
         metrics["MRR"] = sum(reciprocal_ranks) / total
         return EvaluationReport(metrics=metrics)
+
+    @staticmethod
+    def evaluate_blocking(
+        candidate_pairs: list[tuple[str, str]],
+        ground_truth: list[tuple[str, str]],
+        dataset1_size: int,
+        dataset2_size: int,
+    ) -> EvaluationReport:
+        """Compute Pair Completeness and Reduction Ratio for a blocking pass.
+
+        These metrics assess a :class:`~linkingtk.blocking.base.BlockingStrategy`
+        in isolation, before any linker scores the candidate pairs it produces.
+
+        Args:
+            candidate_pairs: ``(source_id, target_id)`` candidate pairs
+                produced by a blocking strategy.
+            ground_truth: List of ``(source_id, target_id)`` true matching
+                pairs.
+            dataset1_size: Number of entities in the first dataset.
+            dataset2_size: Number of entities in the second dataset.
+
+        Returns:
+            A report containing ``pair_completeness`` (the fraction of true
+            matches present among the candidate pairs, i.e. blocking recall)
+            and ``reduction_ratio`` (the fraction of the full ``dataset1_size
+            * dataset2_size`` cross-product eliminated by blocking).
+        """
+        candidate_set = set(candidate_pairs)
+        true_positives = sum(1 for pair in ground_truth if pair in candidate_set)
+        pair_completeness = true_positives / len(ground_truth) if ground_truth else 0.0
+
+        total_possible = dataset1_size * dataset2_size
+        reduction_ratio = 1 - len(candidate_pairs) / total_possible if total_possible else 0.0
+        return EvaluationReport(
+            metrics={"pair_completeness": pair_completeness, "reduction_ratio": reduction_ratio}
+        )

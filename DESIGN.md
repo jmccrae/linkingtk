@@ -183,6 +183,16 @@ report = Evaluator.evaluate_ranked(
 )
 print(report.metrics)
 # Output: {"Hits@1": 0.5, "Hits@5": 1.0, "MRR": 0.75}
+
+# Blocking-quality metrics (independent of any downstream linker)
+report = Evaluator.evaluate_blocking(
+    candidate_pairs=[("e1", "e1_target")],
+    ground_truth=[("e1", "e1_target"), ("e2", "e2_correct")],
+    dataset1_size=2,
+    dataset2_size=2,
+)
+print(report.metrics)
+# Output: {"pair_completeness": 0.5, "reduction_ratio": 0.75}
 ```
 
 ## Datasets

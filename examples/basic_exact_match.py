@@ -26,6 +26,14 @@ def main() -> None:
     report = Evaluator.evaluate(predictions=predictions, ground_truth=ground_truth)
     print("Metrics:", report.metrics)
 
+    blocking_report = Evaluator.evaluate_blocking(
+        candidate_pairs=predictions,
+        ground_truth=ground_truth,
+        dataset1_size=len(dataset1),
+        dataset2_size=len(dataset2),
+    )
+    print("Blocking metrics:", blocking_report.metrics)
+
 
 if __name__ == "__main__":
     main()
