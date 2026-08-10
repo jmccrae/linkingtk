@@ -11,7 +11,6 @@ a preconfigured instance of this class.
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from collections.abc import Callable
 from functools import cache
@@ -20,65 +19,17 @@ from typing import Literal
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.trie import edit_distance
-from linkingtk.core.entity import Entity, context_text, description_text, label_texts
+from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.text import Field, resolve_field, tokenize
 
-FieldName = Literal["label", "description", "context"]
-Field = FieldName | Callable[[Entity], str]
 MetricName = Literal["word_overlap", "jaccard", "levenshtein"]
 Metric = MetricName | Callable[[str, str], float]
-
-_TOKEN_RE = re.compile(r"[a-zA-Z]+")
-
-_STOPWORDS = frozenset(
-    {
-        "a",
-        "an",
-        "the",
-        "and",
-        "or",
-        "but",
-        "of",
-        "to",
-        "in",
-        "on",
-        "at",
-        "for",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "it",
-        "its",
-        "this",
-        "that",
-        "with",
-        "as",
-        "by",
-        "from",
-        "has",
-        "have",
-        "had",
-        "not",
-        "he",
-        "she",
-        "they",
-        "we",
-        "you",
-        "i",
-    }
-)
 
 
 @cache
 def _tokenize(text: str) -> frozenset[str]:
-    """Lowercase, alphabetic-token bag-of-words with stopwords removed."""
-    return frozenset(
-        token.lower() for token in _TOKEN_RE.findall(text) if token.lower() not in _STOPWORDS
-    )
+    return frozenset(tokenize(text))
 
 
 def _word_overlap(text1: str, text2: str) -> float:
@@ -101,12 +52,6 @@ def _levenshtein_similarity(text1: str, text2: str) -> float:
         return 1.0
     return 1.0 - edit_distance(text1, text2) / denom
 
-
-_FIELD_EXTRACTORS: dict[FieldName, Callable[[Entity], str]] = {
-    "label": lambda entity: " ".join(label_texts(entity)),
-    "description": description_text,
-    "context": context_text,
-}
 
 _METRICS: dict[MetricName, Callable[[str, str], float]] = {
     "word_overlap": _word_overlap,
@@ -156,16 +101,8 @@ class StringSimilarityLinker(BaseLinker):
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:
-        extract_source = (
-            _FIELD_EXTRACTORS[self.source_field]
-            if isinstance(self.source_field, str)
-            else self.source_field
-        )
-        extract_target = (
-            _FIELD_EXTRACTORS[self.target_field]
-            if isinstance(self.target_field, str)
-            else self.target_field
-        )
+        extract_source = resolve_field(self.source_field)
+        extract_target = resolve_field(self.target_field)
         score = _METRICS[self.metric] if isinstance(self.metric, str) else self.metric
 
         pairs = blocking.candidate_pairs(dataset1, dataset2)

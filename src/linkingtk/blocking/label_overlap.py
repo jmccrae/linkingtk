@@ -20,14 +20,12 @@ drop weak candidates outright.
 
 from __future__ import annotations
 
-import heapq
 import logging
 from collections import defaultdict
-from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Literal
 
-from linkingtk.blocking.base import BlockingStrategy
+from linkingtk.blocking.base import BlockingStrategy, rank_top_matches
 from linkingtk.blocking.trie import PatriciaTrie
 from linkingtk.core.entity import Entity, label_texts
 
@@ -113,21 +111,6 @@ class LabelOverlap(BlockingStrategy):
         n = self.ngram_size
         return [text[i : i + n] for i in range(len(text) - n + 1)]
 
-    def _top_matches(
-        self,
-        scores: dict[str, float],
-        entities2_by_id: dict[str, Entity],
-        *,
-        key: Callable[[tuple[str, float]], tuple[float, str]],
-        keep: Callable[[float], bool] | None,
-    ) -> list[Entity]:
-        """Rank ``scores`` by ``key``, optionally filter by ``keep``, and take the top matches."""
-        items: Iterable[tuple[str, float]] = scores.items()
-        if keep is not None:
-            items = [item for item in items if keep(item[1])]
-        top = heapq.nsmallest(self.max_matches, items, key=key)
-        return [entities2_by_id[entity2_id] for entity2_id, _ in top]
-
     def _ngram_candidate_pairs(
         self,
         dataset1: list[Entity],
@@ -178,8 +161,8 @@ class LabelOverlap(BlockingStrategy):
                             scores[entity2_id] += 1.0 / (stat.label_length + len(text))
                     seen[ngram] += 1
 
-            matches_for_entity1 = self._top_matches(
-                scores, entities2_by_id, key=lambda item: (-item[1], item[0]), keep=keep
+            matches_for_entity1 = rank_top_matches(
+                scores, entities2_by_id, self.max_matches, descending=True, keep=keep
             )
             pairs.extend((entity1, entity2) for entity2 in matches_for_entity1)
         return pairs
@@ -205,8 +188,8 @@ class LabelOverlap(BlockingStrategy):
                     if entity2_id not in best_by_id or score < best_by_id[entity2_id]:
                         best_by_id[entity2_id] = score
 
-            matches_for_entity1 = self._top_matches(
-                best_by_id, entities2_by_id, key=lambda item: (item[1], item[0]), keep=keep
+            matches_for_entity1 = rank_top_matches(
+                best_by_id, entities2_by_id, self.max_matches, descending=False, keep=keep
             )
             pairs.extend((entity1, entity2) for entity2 in matches_for_entity1)
         return pairs
