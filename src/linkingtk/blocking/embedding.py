@@ -1,55 +1,40 @@
 """Fuzzy blocking strategy based on TF-IDF vector similarity.
 
 A non-neural, classical-ML alternative to :class:`~linkingtk.blocking.label_overlap.LabelOverlap`:
-entities are compared by cosine similarity of TF-IDF-weighted term
-vectors rather than surface-string overlap, so paraphrased or reordered
-text (e.g. a description and a differently-worded gloss of the same
-sense) can still block together.
+entities are compared by cosine similarity of vectors from a pluggable
+scikit-learn-style text vectorizer (TF-IDF by default) rather than surface-
+string overlap, so paraphrased or reordered text (e.g. a description and a
+differently-worded gloss of the same sense) can still block together.
 """
 
 from __future__ import annotations
 
-import math
-from collections import defaultdict
 from collections.abc import Iterable
+from typing import Any, Protocol
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
 
 from linkingtk.blocking.base import BlockingStrategy, rank_top_matches
 from linkingtk.core.entity import Entity
-from linkingtk.core.text import Field, resolve_field, tokenize
-
-TfIdfVector = dict[str, float]
+from linkingtk.core.text import Field, resolve_field
 
 
-def _document_frequency(token_lists: Iterable[list[str]]) -> dict[str, int]:
-    frequency: dict[str, int] = defaultdict(int)
-    for tokens in token_lists:
-        for token in set(tokens):
-            frequency[token] += 1
-    return frequency
+class Vectorizer(Protocol):
+    """Structural type for a fit_transform/transform text vectorizer (e.g. scikit-learn's)."""
 
-
-def _vectorize(tokens: list[str], idf: dict[str, float]) -> TfIdfVector:
-    term_frequency: dict[str, int] = defaultdict(int)
-    for token in tokens:
-        term_frequency[token] += 1
-    return {token: count * idf[token] for token, count in term_frequency.items() if token in idf}
-
-
-def _norm(vector: TfIdfVector) -> float:
-    return math.sqrt(sum(weight * weight for weight in vector.values()))
+    def fit_transform(self, raw_documents: Iterable[str]) -> Any: ...
+    def transform(self, raw_documents: Iterable[str]) -> Any: ...
 
 
 class EmbeddingSimilarityBlocker(BlockingStrategy):
-    """Blocks entities by cosine similarity of TF-IDF term vectors.
+    """Blocks entities by cosine similarity of vectorized text.
 
-    Builds a TF-IDF index over ``dataset2`` (IDF weights come from
-    ``dataset2`` alone, treating it as the reference corpus), then for
+    Fits ``vectorizer`` on ``dataset2`` (treating it as the reference
+    corpus) and projects ``dataset1`` into that same vector space, then for
     each ``dataset1`` entity retrieves the ``top_k`` closest ``dataset2``
-    entities by cosine similarity. Only candidates sharing at least one
-    term are ever scored, via an inverted index, so this stays well
-    below the full O(n*m) comparison space, as long as ``dataset2`` has no
-    term shared by an unbounded fraction of its entities (see
-    ``max_document_frequency``).
+    entities by cosine similarity via
+    :class:`sklearn.neighbors.NearestNeighbors`.
 
     Args:
         field: Which text to compare entities on: ``"label"`` (all
@@ -58,10 +43,23 @@ class EmbeddingSimilarityBlocker(BlockingStrategy):
             passed instead, for fields not covered above.
         top_k: Maximum number of candidates to keep per source entity.
         threshold: Optional minimum cosine similarity a candidate must
-            reach to be kept.
-        max_document_frequency: Terms shared by more than this many
-            ``dataset2`` entities are dropped as uninformative before
-            matching, bounding the cost of any one term's posting list.
+            reach to be kept. If not set, candidates with a similarity of
+            exactly zero are still dropped, since ``top_k`` nearest-
+            neighbor search otherwise always returns ``top_k`` results
+            regardless of relevance. This default assumes a non-negative
+            vector representation (true for ``TfidfVectorizer``,
+            ``CountVectorizer``, and other bag-of-words-style vectorizers,
+            where a zero similarity exactly means "shares nothing"); for a
+            dense embedding vectorizer, where small positive or negative
+            similarities can be meaningful, pass an explicit ``threshold``
+            instead of relying on this default.
+        vectorizer: Any object exposing scikit-learn's
+            ``fit_transform``/``transform`` interface (e.g.
+            ``TfidfVectorizer``, ``CountVectorizer``, or a custom embedding
+            wrapper). Defaults to
+            ``TfidfVectorizer(stop_words="english")``. Document-frequency
+            pruning, n-gram ranges, and other vectorization choices are
+            configured on the vectorizer itself rather than on this class.
     """
 
     def __init__(
@@ -69,55 +67,45 @@ class EmbeddingSimilarityBlocker(BlockingStrategy):
         field: Field = "label",
         top_k: int = 10,
         threshold: float | None = None,
-        max_document_frequency: int = 1000,
+        vectorizer: Vectorizer | None = None,
     ) -> None:
         if top_k < 1:
             raise ValueError("top_k must be at least 1")
         self.field = field
         self.top_k = top_k
         self.threshold = threshold
-        self.max_document_frequency = max_document_frequency
+        self.vectorizer: Vectorizer = (
+            vectorizer if vectorizer is not None else TfidfVectorizer(stop_words="english")
+        )
 
     def candidate_pairs(
         self, dataset1: list[Entity], dataset2: list[Entity]
     ) -> list[tuple[Entity, Entity]]:
+        if not dataset1 or not dataset2:
+            return []
+
         extract = resolve_field(self.field)
+        texts2 = [extract(entity) for entity in dataset2]
+        texts1 = [extract(entity) for entity in dataset1]
+
+        matrix2 = self.vectorizer.fit_transform(texts2)
+        matrix1 = self.vectorizer.transform(texts1)
+
+        n_neighbors = min(self.top_k, matrix2.shape[0])
+        model = NearestNeighbors(metric="cosine", n_neighbors=n_neighbors).fit(matrix2)
+        distances, indices = model.kneighbors(matrix1)
 
         entities2_by_id = {entity.id: entity for entity in dataset2}
-        token_lists2 = {entity.id: tokenize(extract(entity)) for entity in dataset2}
-        idf = {
-            token: math.log((1 + len(dataset2)) / (1 + df)) + 1.0
-            for token, df in _document_frequency(token_lists2.values()).items()
-            if df <= self.max_document_frequency
-        }
+        threshold = self.threshold
 
-        # Vector norms and the inverted index are both derived from the
-        # same per-entity TF-IDF vector, so build them in one pass rather
-        # than three separate traversals of dataset2.
-        norms2: dict[str, float] = {}
-        inverted_index: dict[str, list[tuple[str, float]]] = defaultdict(list)
-        for entity_id, tokens in token_lists2.items():
-            vector = _vectorize(tokens, idf)
-            norms2[entity_id] = _norm(vector)
-            for token, weight in vector.items():
-                inverted_index[token].append((entity_id, weight))
+        def keep(score: float) -> bool:
+            return score >= threshold if threshold is not None else score > 0.0
 
-        keep = (lambda score: score >= self.threshold) if self.threshold is not None else None
         pairs: list[tuple[Entity, Entity]] = []
-        for entity1 in dataset1:
-            vector1 = _vectorize(tokenize(extract(entity1)), idf)
-            norm1 = _norm(vector1)
-            if norm1 == 0.0:
-                continue
-
-            dot_products: dict[str, float] = defaultdict(float)
-            for token, weight1 in vector1.items():
-                for entity_id, weight2 in inverted_index.get(token, []):
-                    dot_products[entity_id] += weight1 * weight2
-
+        for row, entity1 in enumerate(dataset1):
             scores = {
-                entity_id: dot / (norm1 * norms2[entity_id])
-                for entity_id, dot in dot_products.items()
+                dataset2[col].id: 1.0 - dist
+                for col, dist in zip(indices[row], distances[row], strict=True)
             }
             matches = rank_top_matches(
                 scores, entities2_by_id, self.top_k, descending=True, keep=keep

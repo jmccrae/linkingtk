@@ -115,11 +115,18 @@ linkingtk/
 
 Package management with `uv`
 
+Core (required) dependencies cover the toolkit's baseline ML stack —
+classical and neural methods used across multiple tasks. `[as a feature]`
+dependencies are optional extras gating one specific algorithm family or
+data format (graph-structured EA, spaCy-based NLP, KGE), installed only
+when that family is used.
+
 - networkx [as a feature]
 - rdflib [as a feature]
 - transformers
 - datasets
 - peft
+- scikit-learn
 - spacy [as a feature]
 - pykeen [as a feature]
 

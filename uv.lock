@@ -1342,6 +1342,8 @@ source = { editable = "." }
 dependencies = [
     { name = "datasets" },
     { name = "peft" },
+    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scikit-learn", version = "1.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "transformers" },
 ]
 
@@ -1385,6 +1387,7 @@ requires-dist = [
     { name = "peft", specifier = ">=0.11" },
     { name = "pykeen", marker = "extra == 'kge'", specifier = ">=1.10" },
     { name = "rdflib", marker = "extra == 'graph'", specifier = ">=7.0" },
+    { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = ">=3.7" },
     { name = "transformers", specifier = ">=4.40" },
 ]

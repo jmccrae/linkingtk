@@ -1,4 +1,6 @@
+import numpy as np
 import pytest
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from linkingtk.blocking.embedding import EmbeddingSimilarityBlocker
 from linkingtk.core.entity import Entity
@@ -78,14 +80,35 @@ def test_rejects_invalid_config() -> None:
         EmbeddingSimilarityBlocker(top_k=0)
 
 
-def test_max_document_frequency_prunes_overly_common_terms() -> None:
-    dataset1 = _entities("common")
-    dataset2 = _entities("common one", "common two", "common three")
+def test_custom_vectorizer_max_df_prunes_overly_common_terms() -> None:
+    dataset1 = _entities("shared apple")
+    dataset2 = _entities("shared banana", "shared cherry", "shared date")
 
     unpruned = EmbeddingSimilarityBlocker(field="description").candidate_pairs(dataset1, dataset2)
     pruned = EmbeddingSimilarityBlocker(
-        field="description", max_document_frequency=2
+        field="description", vectorizer=TfidfVectorizer(max_df=2)
     ).candidate_pairs(dataset1, dataset2)
 
     assert len(unpruned) == 3
     assert pruned == []
+
+
+def test_custom_vectorizer_returning_dense_array_is_supported() -> None:
+    class _DenseStubVectorizer:
+        def fit_transform(self, raw_documents: list[str]) -> np.ndarray:
+            self._vocab = sorted({token for text in raw_documents for token in text.split()})
+            return self.transform(raw_documents)
+
+        def transform(self, raw_documents: list[str]) -> np.ndarray:
+            return np.array(
+                [[float(token in text.split()) for token in self._vocab] for text in raw_documents]
+            )
+
+    dataset1 = _entities("cat dog", "elephant")
+    dataset2 = _entities("cat dog", "bird")
+
+    pairs = EmbeddingSimilarityBlocker(
+        field="description", vectorizer=_DenseStubVectorizer()
+    ).candidate_pairs(dataset1, dataset2)
+
+    assert [(e1.id, e2.id) for e1, e2 in pairs] == [("0", "0")]
