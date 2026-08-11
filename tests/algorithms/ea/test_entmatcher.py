@@ -1,5 +1,6 @@
 from linkingtk.algorithms.ea import EntMatcherLinker
 from linkingtk.algorithms.feature_classifier import FeatureClassifierLinker
+from linkingtk.algorithms.matching import OptimalMatcher
 from linkingtk.blocking import LabelOverlap
 from linkingtk.datasets.toy import ToyEADataset
 from linkingtk.eval import Evaluator
@@ -8,7 +9,7 @@ from linkingtk.eval import Evaluator
 def test_entmatcher_is_a_preconfigured_feature_classifier_linker() -> None:
     linker = EntMatcherLinker()
     assert isinstance(linker, FeatureClassifierLinker)
-    assert linker.matching == "optimal"
+    assert isinstance(linker.matching, OptimalMatcher)
 
 
 def test_entmatcher_fits_and_links_toy_ea_dataset() -> None:

@@ -70,7 +70,7 @@ single fixed metric, then resolves the final one-to-one mapping via a
 globally optimal assignment (the Hungarian algorithm) rather than
 independent per-source argmax.
 [`EntMatcherLinker`](reference/algorithms.md) is a preconfigured instance
-of `FeatureClassifierLinker` (`matching="optimal"`), named after
+of `FeatureClassifierLinker` (`matching=OptimalMatcher()`), named after
 [EntMatcher](https://github.com/DexterZeng/EntMatcher) — not a dependency
 of this project, but the source of the "a globally optimal assignment can
 outperform independent per-source matching" idea reused here. Blocking

@@ -1,7 +1,7 @@
 import pytest
 
-from linkingtk.algorithms.base import greedy_matches
 from linkingtk.algorithms.feature_classifier import DEFAULT_FEATURES, FeatureClassifierLinker
+from linkingtk.algorithms.matching import OptimalMatcher
 from linkingtk.blocking import LabelOverlap, sample_hard_negatives
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
@@ -44,7 +44,7 @@ class TestFitAndLink:
         kg1, kg2, ground_truth = ToyEADataset().load()
         blocking = _blocking()
 
-        linker = FeatureClassifierLinker(matching="optimal").fit(
+        linker = FeatureClassifierLinker(matching=OptimalMatcher()).fit(
             kg1, kg2, ground_truth, blocking=blocking, random_state=0
         )
         results = linker.link(kg1, kg2, blocking=blocking)
@@ -126,50 +126,6 @@ class TestExplicitNegatives:
 
         assert classifier.fit_y is not None
         assert classifier.fit_y.count(0) == len(negatives)
-
-
-class TestMatchingStrategies:
-    """Unit tests isolating the matching algorithms from classifier training,
-    with hand-crafted scores under exact control -- this is where
-    EntMatcher's actual value-add (a globally optimal assignment can beat
-    independent per-source argmax) is deterministically demonstrable."""
-
-    def test_greedy_allows_a_target_collision(self) -> None:
-        candidates = {
-            "A1": [("T1", 0.9), ("T2", 0.1)],
-            "A2": [("T1", 0.95), ("T2", 0.80)],
-        }
-
-        results = greedy_matches(candidates)
-
-        assert {(r.source_id, r.target_id) for r in results} == {("A1", "T1"), ("A2", "T1")}
-
-    def test_optimal_resolves_the_same_collision(self) -> None:
-        candidates = {
-            "A1": [("T1", 0.9), ("T2", 0.1)],
-            "A2": [("T1", 0.95), ("T2", 0.80)],
-        }
-
-        results = FeatureClassifierLinker._optimal_matches(candidates)
-
-        assert {(r.source_id, r.target_id) for r in results} == {("A1", "T1"), ("A2", "T2")}
-
-    def test_optimal_drops_sources_left_with_no_real_candidate(self) -> None:
-        # 2 sources compete for 1 target; whichever loses the assignment
-        # should be dropped entirely, not paired with a nonexistent candidate.
-        candidates = {
-            "A1": [("T1", 0.9)],
-            "A2": [("T1", 0.95)],
-        }
-
-        results = FeatureClassifierLinker._optimal_matches(candidates)
-
-        assert len(results) == 1
-        assert results[0].source_id == "A2"
-        assert results[0].target_id == "T1"
-
-    def test_optimal_matches_empty_input(self) -> None:
-        assert FeatureClassifierLinker._optimal_matches({}) == []
 
 
 class TestGuards:

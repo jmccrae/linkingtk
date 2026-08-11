@@ -16,7 +16,8 @@ from collections.abc import Callable
 from functools import cache
 from typing import Literal
 
-from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph, greedy_matches
+from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph
+from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.trie import edit_distance
 from linkingtk.core.entity import Entity
@@ -82,6 +83,13 @@ class StringSimilarityLinker(BaseLinker):
             edit-distance similarity). A callable taking two strings and
             returning a similarity score (higher is better) may be passed
             instead, for metrics not covered above.
+        matching: Strategy used to resolve scored candidates into final
+            links. Defaults to
+            `~linkingtk.algorithms.matching.GreedyMatcher` (each source
+            entity's highest-scoring candidate, independently — multiple
+            sources may map to the same target). Pass
+            `~linkingtk.algorithms.matching.OptimalMatcher` for a globally
+            optimal one-to-one assignment instead.
     """
 
     def __init__(
@@ -89,10 +97,12 @@ class StringSimilarityLinker(BaseLinker):
         source_field: Field = "label",
         target_field: Field = "label",
         metric: Metric = "jaccard",
+        matching: Matcher = DEFAULT_MATCHER,
     ) -> None:
         self.source_field = source_field
         self.target_field = target_field
         self.metric = metric
+        self.matching = matching
 
     def link(
         self,
@@ -119,4 +129,4 @@ class StringSimilarityLinker(BaseLinker):
                 (entity2.id, score(source_texts[entity1.id], target_texts[entity2.id]))
             )
 
-        return greedy_matches(candidates_by_source)
+        return self.matching.match(candidates_by_source)

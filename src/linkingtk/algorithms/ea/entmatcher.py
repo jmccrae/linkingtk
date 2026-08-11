@@ -10,17 +10,18 @@ References:
 from __future__ import annotations
 
 from linkingtk.algorithms.feature_classifier import FeatureClassifierLinker
+from linkingtk.algorithms.matching import OptimalMatcher
 
 
 class EntMatcherLinker(FeatureClassifierLinker):
     """EA linker combining hand-crafted similarity features with optimal one-to-one matching.
 
     A preconfigured :class:`~linkingtk.algorithms.feature_classifier.FeatureClassifierLinker`
-    (``matching="optimal"``) — see that class for the feature set, training,
-    and matching behavior. Kept as its own named class since it maps to a
-    recognizable reference (EntMatcher's key insight: a globally optimal
-    assignment can outperform independent per-source matching).
+    (``matching=OptimalMatcher()``) — see that class for the feature set,
+    training, and matching behavior. Kept as its own named class since it
+    maps to a recognizable reference (EntMatcher's key insight: a globally
+    optimal assignment can outperform independent per-source matching).
     """
 
     def __init__(self) -> None:
-        super().__init__(matching="optimal")
+        super().__init__(matching=OptimalMatcher())

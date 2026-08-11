@@ -5,9 +5,10 @@ on hand-crafted similarity features, rather than a single fixed metric —
 in the style of EntMatcher (https://github.com/DexterZeng/EntMatcher, see
 DESIGN.md's Entity Alignment references). EntMatcher itself is a research
 repo, not a dependency of this project; the idea reused here is that a
-*globally optimal* one-to-one assignment (``matching="optimal"``) can
-outperform independent per-source argmax matching, regardless of what
-produces the underlying similarity score.
+*globally optimal* one-to-one assignment
+(`~linkingtk.algorithms.matching.OptimalMatcher`) can outperform
+independent per-source argmax matching, regardless of what produces the
+underlying similarity score.
 """
 
 from __future__ import annotations
@@ -16,22 +17,16 @@ import logging
 import random
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
-from scipy.optimize import linear_sum_assignment
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from linkingtk.algorithms.base import (
-    DEFAULT_BLOCKING,
-    BaseLinker,
-    Graph,
-    greedy_matches,
-    rank_candidates,
-)
+from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph
+from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.algorithms.string_similarity import jaccard, levenshtein_similarity, word_overlap
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.embedding import Vectorizer
@@ -44,10 +39,6 @@ logger = logging.getLogger("linkingtk")
 
 FeatureFn = Callable[[Entity, Entity], float]
 TfidfVectors = dict[str, Any]
-
-# Cosine similarity is always in [0, 1] for predict_proba outputs, so any
-# cost (1 - score) above 1.0 is guaranteed worse than every real candidate.
-_SENTINEL_COST = 2.0
 
 _label_text = resolve_field("label")
 
@@ -116,16 +107,18 @@ class FeatureClassifierLinker(BaseLinker):
             in ``[0, 1]`` for its positive class. Defaults to
             ``StandardScaler`` + ``LogisticRegression`` in a
             :func:`sklearn.pipeline.make_pipeline`.
-        matching: ``"greedy"`` (default) picks each source entity's
-            highest-scoring candidate independently, like
+        matching: Strategy used to resolve scored candidates into final
+            links. Defaults to
+            `~linkingtk.algorithms.matching.GreedyMatcher` (each source
+            entity's highest-scoring candidate, independently, like
             ``StringSimilarityLinker`` — multiple source entities may map
-            to the same target. ``"optimal"`` instead finds a single
-            globally optimal one-to-one assignment via
-            :func:`scipy.optimize.linear_sum_assignment` (the Hungarian
-            algorithm), which can outperform greedy matching when two
-            source entities' individually-best candidate is the same
-            target. See :class:`~linkingtk.algorithms.ea.entmatcher.EntMatcherLinker`
-            for a preconfigured instance using ``"optimal"``.
+            to the same target). Pass
+            `~linkingtk.algorithms.matching.OptimalMatcher` for a globally
+            optimal one-to-one assignment instead, which can outperform
+            greedy matching when two source entities' individually-best
+            candidate is the same target. See
+            :class:`~linkingtk.algorithms.ea.entmatcher.EntMatcherLinker`
+            for a preconfigured instance using it.
     """
 
     def __init__(
@@ -133,7 +126,7 @@ class FeatureClassifierLinker(BaseLinker):
         features: list[tuple[str, FeatureFn]] | None = None,
         vectorizer: Vectorizer | None = None,
         classifier: Classifier | None = None,
-        matching: Literal["greedy", "optimal"] = "greedy",
+        matching: Matcher = DEFAULT_MATCHER,
     ) -> None:
         self.features = features if features is not None else DEFAULT_FEATURES
         self.vectorizer: Vectorizer = (
@@ -244,9 +237,7 @@ class FeatureClassifierLinker(BaseLinker):
         for (entity1, entity2), score in zip(pairs, scores, strict=True):
             candidates_by_source[entity1.id].append((entity2.id, float(score)))
 
-        if self.matching == "greedy":
-            return greedy_matches(candidates_by_source)
-        return self._optimal_matches(candidates_by_source)
+        return self.matching.match(candidates_by_source)
 
     @staticmethod
     def _sample_random_negatives(
@@ -318,51 +309,3 @@ class FeatureClassifierLinker(BaseLinker):
                 row.append(float(cosine_similarity(tfidf1[entity1.id], tfidf2[entity2.id])[0, 0]))
             rows.append(row)
         return rows
-
-    @staticmethod
-    def _optimal_matches(
-        candidates_by_source: dict[str, list[tuple[str, float]]],
-    ) -> list[AlignmentResult]:
-        source_ids = list(candidates_by_source.keys())
-        if not source_ids:
-            return []
-
-        scores_by_pair: dict[tuple[str, str], float] = {
-            (source_id, target_id): score
-            for source_id, candidates in candidates_by_source.items()
-            for target_id, score in candidates
-        }
-        target_ids = sorted({target_id for _, target_id in scores_by_pair})
-
-        # A dense cost matrix (rather than a sparse min-weight bipartite
-        # matching) is the right tradeoff at this class's intended scale —
-        # blocking-reduced candidate sets on the toy/small datasets this
-        # milestone targets, not the thousands-of-entities KG-scale
-        # workloads that graph-embedding-based EA (a later milestone)
-        # would need to worry about.
-        cost_matrix = [
-            [
-                1.0 - score
-                if (score := scores_by_pair.get((source_id, target_id))) is not None
-                else _SENTINEL_COST
-                for target_id in target_ids
-            ]
-            for source_id in source_ids
-        ]
-        row_indices, col_indices = linear_sum_assignment(cost_matrix)
-
-        results = []
-        for row, col in zip(row_indices, col_indices, strict=True):
-            source_id, target_id = source_ids[row], target_ids[col]
-            if (source_id, target_id) not in scores_by_pair:
-                continue  # matched to the sentinel: no real candidate available
-            ranked = rank_candidates(candidates_by_source[source_id])
-            results.append(
-                AlignmentResult(
-                    source_id=source_id,
-                    target_id=target_id,
-                    score=scores_by_pair[(source_id, target_id)],
-                    alternatives=[t for t, _ in ranked if t != target_id],
-                )
-            )
-        return results

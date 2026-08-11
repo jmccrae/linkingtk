@@ -1,3 +1,4 @@
+from linkingtk.algorithms.matching import GreedyMatcher, OptimalMatcher
 from linkingtk.algorithms.string_similarity import StringSimilarityLinker
 from linkingtk.algorithms.wsd import LeskLinker
 from linkingtk.blocking.base import BlockingStrategy
@@ -110,6 +111,41 @@ class TestRanking:
 
         assert results[0].target_id == "t1"
         assert set(results[0].alternatives) == {"t2", "t3"}
+
+
+class TestMatchingStrategy:
+    def test_defaults_to_greedy_matcher(self) -> None:
+        linker = StringSimilarityLinker()
+        assert isinstance(linker.matching, GreedyMatcher)
+
+    def test_accepts_an_optimal_matcher_to_resolve_collisions(self) -> None:
+        # e1's and e2's individually-best target is both t1 (word_overlap
+        # 5 and 6 respectively), but e2 also has a decent t2 match (4)
+        # while e1's t2 match is weak (1) -- the globally optimal
+        # assignment (e1->t1, e2->t2, total 9) beats the alternative
+        # (e1->t2, e2->t1, total 7), unlike greedy which lets both pick t1.
+        dataset1 = [
+            Entity(id="e1", labels=["a b c d e g"]),
+            Entity(id="e2", labels=["a b c d e f g h i j"]),
+        ]
+        dataset2 = [
+            Entity(id="t1", labels=["a b c d e f"]),
+            Entity(id="t2", labels=["g h i j"]),
+        ]
+
+        greedy = StringSimilarityLinker(metric="word_overlap", matching=GreedyMatcher())
+        greedy_results = greedy.link(dataset1, dataset2, blocking=_AllPairs())
+        assert {(r.source_id, r.target_id) for r in greedy_results} == {
+            ("e1", "t1"),
+            ("e2", "t1"),
+        }
+
+        optimal = StringSimilarityLinker(metric="word_overlap", matching=OptimalMatcher())
+        optimal_results = optimal.link(dataset1, dataset2, blocking=_AllPairs())
+        assert {(r.source_id, r.target_id) for r in optimal_results} == {
+            ("e1", "t1"),
+            ("e2", "t2"),
+        }
 
 
 class TestLeskIsAStringSimilarityLinker:
