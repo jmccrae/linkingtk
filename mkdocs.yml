@@ -19,12 +19,20 @@ theme:
         name: Switch to light mode
   features:
     - navigation.sections
+    - navigation.indexes
     - navigation.top
     - content.code.copy
 
 nav:
   - Home: index.md
-  - Examples: examples.md
+  - Examples:
+      - Overview: examples/index.md
+      - Lesk WSD: examples/lesk_wsd.md
+      - String similarity (EA): examples/string_similarity_ea.md
+      - Feature-based classifier (EA): examples/feature_classifier_ea.md
+      - Hard-negative sampling: examples/negative_sampling.md
+      - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
+      - MVP benchmark: examples/mvp_benchmark.md
   - Datasets: datasets.md
   - API Reference:
       - Core: reference/core.md

@@ -21,7 +21,7 @@ than chance:
 - **`ToyWSDDataset`** — 4 mentions of *"bass"* and *"crane"* against their
   two senses apiece (fish/music, machine/bird). The classic *"bank"*
   example is deliberately left out here since it's already the walkthrough
-  in [the Lesk example](examples.md#word-sense-disambiguation-with-lesk).
+  in [the Lesk example](examples/lesk_wsd.md).
 - **`ToyWSADataset`** — 4 senses of *"mouse"* and *"bat"*, each glossed
   differently across two dictionaries.
 
