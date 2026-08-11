@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import re
 from typing import ClassVar
-from urllib.request import urlopen
 
 from linkingtk.core.entity import Entity
+from linkingtk.datasets._util import fetch_cached, local_name
 from linkingtk.datasets.base import DatasetLoader
 from linkingtk.exceptions import OptionalDependencyError
 
@@ -28,13 +28,7 @@ _ALIGN_LINE_RE = re.compile(r"<([^>]+)>\s+<[^>]+>\s+<([^>]+)>")
 
 
 def _fetch(url: str) -> str:
-    with urlopen(url) as response:
-        data: bytes = response.read()
-    return data.decode("utf-8")
-
-
-def _local_name(uri: str) -> str:
-    return uri.rsplit("#", 1)[-1].rsplit("/", 1)[-1]
+    return fetch_cached(url).decode("utf-8")
 
 
 def _classes_from_ontology(data: str) -> list[Entity]:
@@ -55,7 +49,7 @@ def _classes_from_ontology(data: str) -> list[Entity]:
         entities.append(
             Entity(
                 id=str(subject),
-                labels=[str(label) if label else _local_name(str(subject)).replace("_", " ")],
+                labels=[str(label) if label else local_name(str(subject)).replace("_", " ")],
                 description=str(comment) if comment else None,
             )
         )

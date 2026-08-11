@@ -25,7 +25,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph
+from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
 from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.algorithms.string_similarity import jaccard, levenshtein_similarity, word_overlap
 from linkingtk.blocking.base import BlockingStrategy
@@ -34,6 +34,7 @@ from linkingtk.core.entity import Entity, description_text
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.text import Field, resolve_field
 from linkingtk.exceptions import LinkingTKError
+from linkingtk.utils.graph import Graph
 
 logger = logging.getLogger("linkingtk")
 

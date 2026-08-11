@@ -16,13 +16,14 @@ from collections.abc import Callable
 from functools import cache
 from typing import Literal
 
-from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph
+from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
 from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.trie import edit_distance
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.text import Field, resolve_field, tokenize
+from linkingtk.utils.graph import Graph
 
 MetricName = Literal["word_overlap", "jaccard", "levenshtein"]
 Metric = MetricName | Callable[[str, str], float]

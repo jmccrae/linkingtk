@@ -3,19 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union
 
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
-
-if TYPE_CHECKING:
-    import networkx as nx
-    import rdflib
-
-Triple = tuple[str, str, str]
-Graph = Union[list[Triple], "nx.Graph", "rdflib.Graph", None]
+from linkingtk.utils.graph import Graph
 
 DEFAULT_BLOCKING = ExactMatch()
 

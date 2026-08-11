@@ -6,16 +6,43 @@ SemCor, ...) live in dedicated modules under this package. See DESIGN.md's
 Datasets section for the full list and sources.
 """
 
-from linkingtk.datasets.base import DatasetLoader
+from linkingtk.datasets.base import DatasetLoader, GraphDatasetLoader
+from linkingtk.datasets.dbp15k import DBP15KFrEnDataset, DBP15KJaEnDataset, DBP15KZhEnDataset
+from linkingtk.datasets.icews import IcewsWikiDataset
 from linkingtk.datasets.naisc import AnatomyDataset, ConferenceDataset
+from linkingtk.datasets.openea import (
+    DbpediaWikidata15KDataset,
+    DbpediaYago15KDataset,
+    EnDe15KDataset,
+    EnFr15KDataset,
+)
 from linkingtk.datasets.toy import ToyEADataset, ToyELDataset, ToyWSADataset, ToyWSDDataset
+from linkingtk.datasets.wordnet_wikidata import (
+    WordNetWikidataLanguagesDataset,
+    WordNetWikidataLocationsDataset,
+    WordNetWikidataOrganismsDataset,
+    WordNetWikidataOrganismsHardDataset,
+)
 
 __all__ = [
     "DatasetLoader",
+    "GraphDatasetLoader",
     "ConferenceDataset",
     "AnatomyDataset",
     "ToyEADataset",
     "ToyWSDDataset",
     "ToyELDataset",
     "ToyWSADataset",
+    "DBP15KZhEnDataset",
+    "DBP15KJaEnDataset",
+    "DBP15KFrEnDataset",
+    "EnFr15KDataset",
+    "EnDe15KDataset",
+    "DbpediaWikidata15KDataset",
+    "DbpediaYago15KDataset",
+    "IcewsWikiDataset",
+    "WordNetWikidataLanguagesDataset",
+    "WordNetWikidataLocationsDataset",
+    "WordNetWikidataOrganismsDataset",
+    "WordNetWikidataOrganismsHardDataset",
 ]
