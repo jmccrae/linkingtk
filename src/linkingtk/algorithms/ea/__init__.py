@@ -7,5 +7,6 @@ a supporting graph is normally available. See DESIGN.md for references
 """
 
 from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
+from linkingtk.algorithms.ea.kge import KGELinker
 
-__all__ = ["EntMatcherLinker"]
+__all__ = ["EntMatcherLinker", "KGELinker"]

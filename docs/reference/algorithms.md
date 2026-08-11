@@ -20,6 +20,10 @@
 
 ::: linkingtk.algorithms.ea.entmatcher
 
+### Knowledge Graph Embeddings
+
+::: linkingtk.algorithms.ea.kge
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el

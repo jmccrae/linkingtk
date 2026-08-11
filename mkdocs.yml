@@ -30,6 +30,7 @@ nav:
       - Lesk WSD: examples/lesk_wsd.md
       - String similarity (EA): examples/string_similarity_ea.md
       - Feature-based classifier (EA): examples/feature_classifier_ea.md
+      - Knowledge graph embeddings (EA): examples/kge_ea.md
       - Hard-negative sampling: examples/negative_sampling.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
       - MVP benchmark: examples/mvp_benchmark.md

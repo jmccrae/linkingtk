@@ -47,7 +47,10 @@ extend-exclude = ["*.md"]
 select = ["E", "F", "I", "B", "UP"]
 
 [tool.mypy]
-python_version = "3.10"
+# Not a floor for our own code (requires-python/ruff's target-version stay
+# 3.10) -- numpy 2.5.1's shipped stubs use PEP 695 syntax mypy can't parse
+# below 3.12, and numpy is now imported directly (algorithms/ea/kge.py).
+python_version = "3.12"
 strict = true
 packages = ["linkingtk"]
 mypy_path = "src"
@@ -57,7 +60,7 @@ module = ["networkx.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*"]
+module = ["sklearn.*", "scipy.*", "pykeen.*", "torch.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
