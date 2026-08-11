@@ -16,7 +16,7 @@ from collections.abc import Callable
 from functools import cache
 from typing import Literal
 
-from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph
+from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker, Graph, greedy_matches
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.trie import edit_distance
 from linkingtk.core.entity import Entity
@@ -32,19 +32,19 @@ def _tokenize(text: str) -> frozenset[str]:
     return frozenset(tokenize(text))
 
 
-def _word_overlap(text1: str, text2: str) -> float:
+def word_overlap(text1: str, text2: str) -> float:
     """Count of shared tokens, as used by the classic Lesk algorithm."""
     return float(len(_tokenize(text1) & _tokenize(text2)))
 
 
-def _jaccard(text1: str, text2: str) -> float:
+def jaccard(text1: str, text2: str) -> float:
     """Token-set Jaccard similarity, normalized to ``[0, 1]``."""
     tokens1, tokens2 = _tokenize(text1), _tokenize(text2)
     union = tokens1 | tokens2
     return len(tokens1 & tokens2) / len(union) if union else 0.0
 
 
-def _levenshtein_similarity(text1: str, text2: str) -> float:
+def levenshtein_similarity(text1: str, text2: str) -> float:
     """Character-level similarity derived from normalized edit distance, in ``[0, 1]``."""
     text1, text2 = text1.lower(), text2.lower()
     denom = len(text1) + len(text2)
@@ -54,9 +54,9 @@ def _levenshtein_similarity(text1: str, text2: str) -> float:
 
 
 _METRICS: dict[MetricName, Callable[[str, str], float]] = {
-    "word_overlap": _word_overlap,
-    "jaccard": _jaccard,
-    "levenshtein": _levenshtein_similarity,
+    "word_overlap": word_overlap,
+    "jaccard": jaccard,
+    "levenshtein": levenshtein_similarity,
 }
 
 
@@ -119,16 +119,4 @@ class StringSimilarityLinker(BaseLinker):
                 (entity2.id, score(source_texts[entity1.id], target_texts[entity2.id]))
             )
 
-        results = []
-        for source_id, candidates in candidates_by_source.items():
-            candidates.sort(key=lambda item: (-item[1], item[0]))
-            best_id, best_score = candidates[0]
-            results.append(
-                AlignmentResult(
-                    source_id=source_id,
-                    target_id=best_id,
-                    score=best_score,
-                    alternatives=[target_id for target_id, _ in candidates[1:]],
-                )
-            )
-        return results
+        return greedy_matches(candidates_by_source)

@@ -6,9 +6,15 @@
 
 ::: linkingtk.algorithms.string_similarity
 
+## Feature-based classifier
+
+::: linkingtk.algorithms.feature_classifier
+
 ## Entity Alignment
 
 ::: linkingtk.algorithms.ea
+
+::: linkingtk.algorithms.ea.entmatcher
 
 ## Entity Linking
 

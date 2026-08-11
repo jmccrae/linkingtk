@@ -5,3 +5,7 @@ Entities typically carry labels and descriptions but rarely a context, and
 a supporting graph is normally available. See DESIGN.md for references
 (OpenEA, Simple-HHEA, ChatEA, ProLEA, EntMatcher).
 """
+
+from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
+
+__all__ = ["EntMatcherLinker"]
