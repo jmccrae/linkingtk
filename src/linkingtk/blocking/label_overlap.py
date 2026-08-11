@@ -74,6 +74,8 @@ class LabelOverlap(BlockingStrategy):
             matching. Only used by the ``"ngram"`` metric.
     """
 
+    ranked = True
+
     def __init__(
         self,
         metric: Metric = "ngram",

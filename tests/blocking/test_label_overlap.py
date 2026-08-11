@@ -101,3 +101,7 @@ class TestLevenshteinMetric:
     def test_explicit_queue_max_is_respected(self) -> None:
         strategy = LabelOverlap(metric="levenshtein", max_matches=3, queue_max=7)
         assert strategy.queue_max == 7
+
+
+def test_label_overlap_is_ranked() -> None:
+    assert LabelOverlap.ranked is True

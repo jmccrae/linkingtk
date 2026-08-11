@@ -5,6 +5,7 @@ from __future__ import annotations
 import heapq
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
+from typing import ClassVar
 
 from linkingtk.core.entity import Entity
 
@@ -15,6 +16,16 @@ class BlockingStrategy(ABC):
     Blocking reduces the O(n*m) comparison space between two datasets down
     to a smaller set of plausible candidate pairs.
     """
+
+    ranked: ClassVar[bool] = False
+    """Whether ``candidate_pairs()`` returns each source entity's own
+    candidates best-first. Strategies with a graded notion of relevance
+    built on :func:`rank_top_matches` (`~linkingtk.blocking.label_overlap.LabelOverlap`,
+    `~linkingtk.blocking.embedding.EmbeddingSimilarityBlocker`) set this
+    ``True``; consumers such as
+    :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`
+    check it to warn rather than silently mine the wrong candidates as
+    "hard" negatives."""
 
     @abstractmethod
     def candidate_pairs(
@@ -27,7 +38,12 @@ class BlockingStrategy(ABC):
             dataset2: Entities from the second dataset.
 
         Returns:
-            A list of candidate ``(entity1, entity2)`` pairs.
+            A list of candidate ``(entity1, entity2)`` pairs. Where a
+            strategy has a graded notion of relevance, a given source
+            entity's own candidates should appear best-first (see
+            :attr:`ranked`) — consumers such as
+            :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`
+            rely on this ordering.
         """
 
 

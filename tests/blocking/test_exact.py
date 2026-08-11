@@ -25,3 +25,7 @@ def test_exact_match_deduplicates_pairs() -> None:
     pairs = ExactMatch().candidate_pairs(dataset1, dataset2)
 
     assert len(pairs) == 1
+
+
+def test_exact_match_is_not_ranked() -> None:
+    assert ExactMatch.ranked is False

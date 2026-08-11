@@ -154,34 +154,41 @@ class FeatureClassifierLinker(BaseLinker):
         dataset2: list[Entity],
         ground_truth: list[tuple[str, str]],
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
+        negatives: list[tuple[Entity, Entity]] | None = None,
         negative_ratio: int = 1,
         random_state: int | None = None,
     ) -> FeatureClassifierLinker:
         """Train the classifier on candidate pairs from ``blocking``.
 
         Positive examples are the candidate pairs found in
-        ``ground_truth``; negative examples are sampled from the
-        remaining candidate pairs (up to ``negative_ratio`` times the
-        number of positives). This is a simple, self-contained sampling
-        strategy — see the ``linkingtk.blocking`` hard-negative-sampling
-        utility (once available) for more deliberate negative mining.
+        ``ground_truth``. Negative examples default to a simple,
+        self-contained strategy: the remaining candidate pairs, sampled
+        uniformly at random (up to ``negative_ratio`` times the number of
+        positives). Pass ``negatives`` explicitly — e.g. from
+        :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`
+        — for more deliberate negative mining instead; when given,
+        ``negative_ratio`` and ``random_state`` are ignored.
 
         Args:
             dataset1: Source entities.
             dataset2: Target entities.
             ground_truth: List of ``(source_id, target_id)`` true pairs.
             blocking: Strategy used to generate training candidate pairs.
+            negatives: Explicit negative ``(entity1, entity2)`` pairs to
+                train on, overriding the default random-sampling strategy.
             negative_ratio: Maximum number of negative examples sampled
-                per positive example.
-            random_state: Seed for negative-example sampling.
+                per positive example. Ignored if ``negatives`` is given.
+            random_state: Seed for negative-example sampling. Ignored if
+                ``negatives`` is given.
 
         Returns:
             ``self``, for chaining.
 
         Raises:
             LinkingTKError: If no ``ground_truth`` pair survives
-                ``blocking`` — there would be no positive examples to
-                learn from.
+                ``blocking`` (no positive examples to learn from), or if
+                ``negatives`` is empty (given explicitly, or after
+                sampling) — a classifier can't train on a single class.
         """
         candidates = blocking.candidate_pairs(dataset1, dataset2)
         ground_truth_set = set(ground_truth)
@@ -193,19 +200,15 @@ class FeatureClassifierLinker(BaseLinker):
                 "(see Evaluator.evaluate_blocking) before training a classifier on top "
                 "of it."
             )
-        negatives_pool = [
-            (e1, e2) for e1, e2 in candidates if (e1.id, e2.id) not in ground_truth_set
-        ]
-        if not negatives_pool:
-            raise LinkingTKError(
-                "No negative pairs survived blocking; fit() cannot train a classifier "
-                "on a single class. `blocking` is only returning true-positive pairs "
-                "here — try a broader blocking strategy (e.g. a larger `top_k`/"
-                "`max_matches`, or a looser `threshold`) so it also returns some "
-                "incorrect candidates to learn from."
+
+        if negatives is None:
+            negatives = self._sample_random_negatives(
+                candidates, ground_truth_set, len(positives), negative_ratio, random_state
             )
-        sample_size = min(len(negatives_pool), negative_ratio * len(positives))
-        negatives = random.Random(random_state).sample(negatives_pool, sample_size)
+        elif not negatives:
+            raise LinkingTKError(
+                "`negatives` is empty; fit() cannot train a classifier on a single class."
+            )
 
         training_pairs = positives + negatives
         labels = [1] * len(positives) + [0] * len(negatives)
@@ -244,6 +247,28 @@ class FeatureClassifierLinker(BaseLinker):
         if self.matching == "greedy":
             return greedy_matches(candidates_by_source)
         return self._optimal_matches(candidates_by_source)
+
+    @staticmethod
+    def _sample_random_negatives(
+        candidates: list[tuple[Entity, Entity]],
+        ground_truth_set: set[tuple[str, str]],
+        num_positives: int,
+        negative_ratio: int,
+        random_state: int | None,
+    ) -> list[tuple[Entity, Entity]]:
+        negatives_pool = [
+            (e1, e2) for e1, e2 in candidates if (e1.id, e2.id) not in ground_truth_set
+        ]
+        if not negatives_pool:
+            raise LinkingTKError(
+                "No negative pairs survived blocking; fit() cannot train a classifier "
+                "on a single class. `blocking` is only returning true-positive pairs "
+                "here — try a broader blocking strategy (e.g. a larger `top_k`/"
+                "`max_matches`, or a looser `threshold`) so it also returns some "
+                "incorrect candidates to learn from, or pass `negatives` explicitly."
+            )
+        sample_size = min(len(negatives_pool), negative_ratio * num_positives)
+        return random.Random(random_state).sample(negatives_pool, sample_size)
 
     def _fit_tfidf(
         self, dataset1: list[Entity], dataset2: list[Entity]

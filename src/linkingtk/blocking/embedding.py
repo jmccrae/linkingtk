@@ -62,6 +62,8 @@ class EmbeddingSimilarityBlocker(BlockingStrategy):
             configured on the vectorizer itself rather than on this class.
     """
 
+    ranked = True
+
     def __init__(
         self,
         field: Field = "label",

@@ -112,3 +112,7 @@ def test_custom_vectorizer_returning_dense_array_is_supported() -> None:
     ).candidate_pairs(dataset1, dataset2)
 
     assert [(e1.id, e2.id) for e1, e2 in pairs] == [("0", "0")]
+
+
+def test_embedding_similarity_blocker_is_ranked() -> None:
+    assert EmbeddingSimilarityBlocker.ranked is True

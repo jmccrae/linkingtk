@@ -2,7 +2,7 @@ import pytest
 
 from linkingtk.algorithms.base import greedy_matches
 from linkingtk.algorithms.feature_classifier import DEFAULT_FEATURES, FeatureClassifierLinker
-from linkingtk.blocking import LabelOverlap
+from linkingtk.blocking import LabelOverlap, sample_hard_negatives
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.datasets.toy import ToyEADataset, ToyWSADataset
@@ -71,6 +71,61 @@ class TestFitAndLink:
         linker = FeatureClassifierLinker()
 
         assert linker.fit(kg1, kg2, ground_truth, blocking=_blocking()) is linker
+
+
+class _RecordingClassifier:
+    """Stub classifier that records the labels it was trained on."""
+
+    def __init__(self) -> None:
+        self.fit_y: list[int] | None = None
+
+    def fit(self, X: object, y: list[int]) -> "_RecordingClassifier":
+        self.fit_y = list(y)
+        return self
+
+    def predict_proba(self, X: list[list[float]]) -> list[list[float]]:
+        return [[0.5, 0.5] for _ in X]
+
+
+class TestExplicitNegatives:
+    def test_sample_hard_negatives_integrates_with_fit(self) -> None:
+        kg1, kg2, ground_truth = ToyEADataset().load()
+        blocking = _blocking()
+        negatives = sample_hard_negatives(kg1, kg2, ground_truth, blocking, top_k=2)
+
+        linker = FeatureClassifierLinker().fit(
+            kg1, kg2, ground_truth, blocking=blocking, negatives=negatives
+        )
+        results = linker.link(kg1, kg2, blocking=blocking)
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=ground_truth)
+        assert report.metrics["precision@1"] == 1.0
+
+    def test_empty_explicit_negatives_raises(self) -> None:
+        kg1, kg2, ground_truth = ToyEADataset().load()
+        linker = FeatureClassifierLinker()
+
+        with pytest.raises(LinkingTKError):
+            linker.fit(kg1, kg2, ground_truth, blocking=_blocking(), negatives=[])
+
+    def test_negative_ratio_ignored_when_negatives_given(self) -> None:
+        kg1, kg2, ground_truth = ToyEADataset().load()
+        blocking = _blocking()
+        negatives = sample_hard_negatives(kg1, kg2, ground_truth, blocking, top_k=1)
+        classifier = _RecordingClassifier()
+
+        FeatureClassifierLinker(classifier=classifier).fit(
+            kg1,
+            kg2,
+            ground_truth,
+            blocking=blocking,
+            negatives=negatives,
+            negative_ratio=100,
+        )
+
+        assert classifier.fit_y is not None
+        assert classifier.fit_y.count(0) == len(negatives)
 
 
 class TestMatchingStrategies:

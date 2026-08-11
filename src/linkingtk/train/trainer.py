@@ -2,7 +2,8 @@
 
 Not yet implemented (see DESIGN.md Milestones, Phase 4). Intended to support
 bi-encoder/contrastive training (InfoNCE or Margin Ranking Loss) with hard
-negative sampling drawn from a :class:`~linkingtk.blocking.base.BlockingStrategy`.
+negative sampling drawn from a :class:`~linkingtk.blocking.base.BlockingStrategy`
+— see :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`.
 """
 
 from __future__ import annotations
