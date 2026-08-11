@@ -1,6 +1,6 @@
 # Datasets
 
-See also the [Datasets](../datasets.md) page for usage examples.
+See also the [Datasets](../datasets/index.md) page for usage examples.
 
 ::: linkingtk.datasets.base
 

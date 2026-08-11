@@ -33,7 +33,11 @@ nav:
       - Hard-negative sampling: examples/negative_sampling.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
       - MVP benchmark: examples/mvp_benchmark.md
-  - Datasets: datasets.md
+  - Datasets:
+      - Overview: datasets/index.md
+      - Toy datasets: datasets/toy.md
+      - Naisc datasets: datasets/naisc.md
+      - Real-world EA datasets: datasets/real_world_ea.md
   - API Reference:
       - Core: reference/core.md
       - Blocking: reference/blocking.md

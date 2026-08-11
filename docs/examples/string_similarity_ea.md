@@ -1,6 +1,6 @@
 # Entity Alignment with StringSimilarityLinker
 
-This aligns two small knowledge graphs from [`ToyEADataset`](../datasets.md#toy-datasets)
+This aligns two small knowledge graphs from [`ToyEADataset`](../datasets/toy.md)
 describing the same three cities, but `kg2`'s labels append the country name
 (`"Paris"` vs. `"Paris, France"`), so an exact label match would miss every
 pair. [`LabelOverlap`](../reference/blocking.md) blocking (character n-gram

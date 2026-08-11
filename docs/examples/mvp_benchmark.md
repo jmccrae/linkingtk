@@ -2,7 +2,7 @@
 
 This is the MVP milestone's acceptance demo: the same `StringSimilarityLinker`
 baseline (`LeskLinker` is a preconfigured instance of it) run against a
-[bundled toy dataset](../datasets.md#toy-datasets) for each of the four tasks —
+[bundled toy dataset](../datasets/toy.md) for each of the four tasks —
 Entity Alignment, Entity Linking, Word Sense Disambiguation and Word Sense
 Alignment — each scored with [`Evaluator.evaluate`](../reference/eval.md).
 
