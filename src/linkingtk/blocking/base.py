@@ -20,10 +20,11 @@ class BlockingStrategy(ABC):
     ranked: ClassVar[bool] = False
     """Whether ``candidate_pairs()`` returns each source entity's own
     candidates best-first. Strategies with a graded notion of relevance
-    built on :func:`rank_top_matches` (`~linkingtk.blocking.label_overlap.LabelOverlap`,
-    `~linkingtk.blocking.embedding.EmbeddingSimilarityBlocker`) set this
+    built on [rank_top_matches][linkingtk.blocking.base.rank_top_matches]
+    ([LabelOverlap][linkingtk.blocking.label_overlap.LabelOverlap],
+    [EmbeddingSimilarityBlocker][linkingtk.blocking.embedding.EmbeddingSimilarityBlocker]) set this
     ``True``; consumers such as
-    :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`
+    [sample_hard_negatives][linkingtk.blocking.negative_sampling.sample_hard_negatives]
     check it to warn rather than silently mine the wrong candidates as
     "hard" negatives."""
 
@@ -41,8 +42,8 @@ class BlockingStrategy(ABC):
             A list of candidate ``(entity1, entity2)`` pairs. Where a
             strategy has a graded notion of relevance, a given source
             entity's own candidates should appear best-first (see
-            :attr:`ranked`) — consumers such as
-            :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`
+            [ranked][linkingtk.blocking.base.BlockingStrategy.ranked]) — consumers such as
+            [sample_hard_negatives][linkingtk.blocking.negative_sampling.sample_hard_negatives]
             rely on this ordering.
         """
 
@@ -59,8 +60,8 @@ def rank_top_matches(
 
     Shared by blocking strategies that score every candidate against a
     source entity and keep only the best few
-    (`~linkingtk.blocking.label_overlap.LabelOverlap`,
-    `~linkingtk.blocking.embedding.EmbeddingSimilarityBlocker`). Ties are
+    ([LabelOverlap][linkingtk.blocking.label_overlap.LabelOverlap],
+    [EmbeddingSimilarityBlocker][linkingtk.blocking.embedding.EmbeddingSimilarityBlocker]). Ties are
     broken by entity id for deterministic output.
 
     Args:

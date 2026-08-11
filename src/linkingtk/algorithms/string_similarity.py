@@ -5,7 +5,7 @@ text field from either side (e.g. a mention's context against a
 candidate's gloss, or two entities' labels), then ranks candidates per
 source entity. This is a general-purpose baseline for Entity Alignment,
 Entity Linking and Word Sense Alignment; the classic Lesk algorithm for
-WSD (:class:`linkingtk.algorithms.wsd.lesk.LeskLinker`) is implemented as
+WSD ([linkingtk.algorithms.wsd.lesk.LeskLinker][]) is implemented as
 a preconfigured instance of this class.
 """
 
@@ -86,10 +86,10 @@ class StringSimilarityLinker(BaseLinker):
             instead, for metrics not covered above.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            `~linkingtk.algorithms.matching.GreedyMatcher` (each source
+            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher] (each source
             entity's highest-scoring candidate, independently — multiple
             sources may map to the same target). Pass
-            `~linkingtk.algorithms.matching.OptimalMatcher` for a globally
+            [OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher] for a globally
             optimal one-to-one assignment instead.
     """
 

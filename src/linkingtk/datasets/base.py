@@ -27,11 +27,12 @@ class DatasetLoader(ABC):
 
 
 class GraphDatasetLoader(DatasetLoader):
-    """A :class:`DatasetLoader` whose datasets carry a supporting relational graph.
+    """A [DatasetLoader][linkingtk.datasets.base.DatasetLoader] whose datasets carry a
+    supporting relational graph.
 
     Implemented by the graph-heavy real-world EA dataset loaders (DBP15K,
     OpenEA, ICEWS, WordNet-Wikidata) that back KGE-based linking -- unlike
-    plain :class:`DatasetLoader`, ``load()`` alone isn't enough for those,
+    plain ``DatasetLoader``, ``load()`` alone isn't enough for those,
     since the relational structure (not just entity labels) is the point.
     """
 
@@ -41,7 +42,7 @@ class GraphDatasetLoader(DatasetLoader):
 
         Returns:
             ``(graph1, graph2)``, each in the same shape accepted by
-            :meth:`~linkingtk.algorithms.base.BaseLinker.link`'s ``graph``
+            [link][linkingtk.algorithms.base.BaseLinker.link]'s ``graph``
             parameter -- here always a ``list[Triple]`` of
             ``(subject_id, predicate_id, object_id)``.
         """

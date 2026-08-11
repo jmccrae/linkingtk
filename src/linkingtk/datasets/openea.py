@@ -1,12 +1,12 @@
 """Loaders for OpenEA's sampled multilingual and homogeneous EA benchmarks.
 
-Source: rehosted (see :mod:`~linkingtk.datasets.kg_zip` for why) at
+Source: rehosted (see ``linkingtk.datasets.kg_zip`` for why) at
 https://github.com/DexterZeng/EntMatcher's ``data.zip``, under
 ``data/{en_fr_15k_V1,en_de_15k_V1,dbp_wd_15k_V1,dbp_yg_15k_V1}/``.
 
 Only the 15K/V1 size is available from this mirror -- OpenEA's
 name-bias-fixed V2 release and the EN-FR/EN-DE 100K sizes are Figshare-only
-(no stable fetchable URL, see :mod:`~linkingtk.datasets.kg_zip`'s module
+(no stable fetchable URL, see ``linkingtk.datasets.kg_zip``'s module
 docstring); D-W/D-Y do have a 100K variant in this same zip
 (``dbp_wd_100``/``dbp_yg_100``) but it's not exposed here to keep the
 multilingual and homogeneous sets available at consistent sizes.

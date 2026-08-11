@@ -6,7 +6,7 @@ in the style of EntMatcher (https://github.com/DexterZeng/EntMatcher, see
 DESIGN.md's Entity Alignment references). EntMatcher itself is a research
 repo, not a dependency of this project; the idea reused here is that a
 *globally optimal* one-to-one assignment
-(`~linkingtk.algorithms.matching.OptimalMatcher`) can outperform
+([OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher]) can outperform
 independent per-source argmax matching, regardless of what produces the
 underlying similarity score.
 """
@@ -83,42 +83,44 @@ DEFAULT_FEATURES: list[tuple[str, FeatureFn]] = [
 class FeatureClassifierLinker(BaseLinker):
     """Scores candidate pairs with a classical ML classifier over hand-crafted features.
 
-    Unlike :class:`~linkingtk.algorithms.string_similarity.StringSimilarityLinker`
+    Unlike [StringSimilarityLinker][linkingtk.algorithms.string_similarity.StringSimilarityLinker]
     (a single fixed metric), this combines several similarity signals —
-    :data:`DEFAULT_FEATURES` (string-overlap/edit-distance metrics on the
+    ``DEFAULT_FEATURES`` (string-overlap/edit-distance metrics on the
     ``label`` and ``description`` fields, reused from
-    :mod:`linkingtk.algorithms.string_similarity`) plus a TF-IDF cosine
+    [linkingtk.algorithms.string_similarity][]) plus a TF-IDF cosine
     similarity feature over combined label+description text — into a
     feature vector scored by a trainable ``classifier``. Must be
-    :meth:`fit` before :meth:`link` can be called.
+    [fit][linkingtk.algorithms.feature_classifier.FeatureClassifierLinker.fit]
+    before [link][linkingtk.algorithms.base.BaseLinker.link] can be called.
 
     Args:
         features: ``(name, fn)`` pairs, each ``fn`` scoring one
-            ``(entity1, entity2)`` pair. Defaults to :data:`DEFAULT_FEATURES`.
+            ``(entity1, entity2)`` pair. Defaults to ``DEFAULT_FEATURES``.
         vectorizer: Any object exposing scikit-learn's
             ``fit_transform``/``transform`` interface, used for the TF-IDF
             cosine similarity feature. Defaults to
             ``TfidfVectorizer(stop_words="english")``. Fit once in
-            :meth:`fit`, over both datasets' combined label+description
-            text, and reused via ``transform`` in :meth:`link` — unlike
-            :class:`~linkingtk.blocking.embedding.EmbeddingSimilarityBlocker`,
+            [fit][linkingtk.algorithms.feature_classifier.FeatureClassifierLinker.fit],
+            over both datasets' combined label+description
+            text, and reused via ``transform`` in ``link`` — unlike
+            [EmbeddingSimilarityBlocker][linkingtk.blocking.embedding.EmbeddingSimilarityBlocker],
             which has no explicit fit step and refits per call.
         classifier: Any object exposing scikit-learn's ``fit``/
             ``predict_proba`` interface, expected to return probabilities
             in ``[0, 1]`` for its positive class. Defaults to
             ``StandardScaler`` + ``LogisticRegression`` in a
-            :func:`sklearn.pipeline.make_pipeline`.
+            ``sklearn.pipeline.make_pipeline``.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            `~linkingtk.algorithms.matching.GreedyMatcher` (each source
+            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher] (each source
             entity's highest-scoring candidate, independently, like
             ``StringSimilarityLinker`` — multiple source entities may map
             to the same target). Pass
-            `~linkingtk.algorithms.matching.OptimalMatcher` for a globally
+            [OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher] for a globally
             optimal one-to-one assignment instead, which can outperform
             greedy matching when two source entities' individually-best
             candidate is the same target. See
-            :class:`~linkingtk.algorithms.ea.entmatcher.EntMatcherLinker`
+            [EntMatcherLinker][linkingtk.algorithms.ea.entmatcher.EntMatcherLinker]
             for a preconfigured instance using it.
     """
 
@@ -159,7 +161,7 @@ class FeatureClassifierLinker(BaseLinker):
         self-contained strategy: the remaining candidate pairs, sampled
         uniformly at random (up to ``negative_ratio`` times the number of
         positives). Pass ``negatives`` explicitly — e.g. from
-        :func:`~linkingtk.blocking.negative_sampling.sample_hard_negatives`
+        [sample_hard_negatives][linkingtk.blocking.negative_sampling.sample_hard_negatives]
         — for more deliberate negative mining instead; when given,
         ``negative_ratio`` and ``random_state`` are ignored.
 
@@ -268,8 +270,8 @@ class FeatureClassifierLinker(BaseLinker):
         """Fit ``self.vectorizer`` once on both datasets and return its output, split by dataset.
 
         Reuses the single ``fit_transform`` matrix instead of a separate
-        ``transform`` call per dataset, unlike :meth:`_tfidf_vectors`
-        (used post-fit, in :meth:`link`) which has no such matrix to reuse.
+        ``transform`` call per dataset, unlike ``_tfidf_vectors``
+        (used post-fit, in ``link``) which has no such matrix to reuse.
         """
         texts1 = [_combined_text(entity) for entity in dataset1]
         texts2 = [_combined_text(entity) for entity in dataset2]

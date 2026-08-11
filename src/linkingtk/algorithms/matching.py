@@ -1,6 +1,6 @@
 """Matching strategies that turn scored candidate pairs into final links.
 
-Complements :class:`~linkingtk.blocking.base.BlockingStrategy` ("how do we
+Complements [BlockingStrategy][linkingtk.blocking.base.BlockingStrategy] ("how do we
 generate candidates") with the question of how to resolve them into final
 links once scored — independent per-source argmax, a globally optimal
 assignment, or (in principle, not yet implemented) something that isn't
@@ -22,14 +22,15 @@ def _rank_candidates(candidates: list[tuple[str, float]]) -> list[tuple[str, flo
 
 
 class Matcher(ABC):
-    """Turns per-source scored candidates into final :class:`AlignmentResult`\\ s.
+    """Turns per-source scored candidates into final
+    [AlignmentResult][linkingtk.core.result.AlignmentResult]s.
 
     Not required to return exactly one result per source — e.g. a future
     hierarchical matcher could return several (broader/narrower-related)
     results for one source entity. Shared across linkers that produce a
     ``dict[str, list[tuple[target_id, score]]]`` scored candidate map
-    (`~linkingtk.algorithms.string_similarity.StringSimilarityLinker`,
-    `~linkingtk.algorithms.feature_classifier.FeatureClassifierLinker`).
+    ([StringSimilarityLinker][linkingtk.algorithms.string_similarity.StringSimilarityLinker],
+    [FeatureClassifierLinker][linkingtk.algorithms.feature_classifier.FeatureClassifierLinker]).
 
     Note this only leaves room for *output* cardinality to change. A real
     broader/narrower matcher would also need relation-type/taxonomy
@@ -83,15 +84,16 @@ class GreedyMatcher(Matcher):
 class OptimalMatcher(Matcher):
     """Finds a single globally optimal one-to-one assignment.
 
-    Uses the Hungarian algorithm (:func:`scipy.optimize.linear_sum_assignment`)
+    Uses the Hungarian algorithm (``scipy.optimize.linear_sum_assignment``)
     over a dense cost matrix — the right tradeoff at the scale this toolkit
     currently targets (blocking-reduced candidate sets on toy/small
     datasets), not thousands-of-entities KG-scale workloads (graph-
     embedding-based EA, a later milestone), which would need a sparse
-    bipartite matching instead. Can outperform :class:`GreedyMatcher` when
+    bipartite matching instead. Can outperform
+    [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher] when
     two source entities' individually-best candidate is the same target —
-    see `~linkingtk.algorithms.ea.entmatcher.EntMatcherLinker`, which uses
-    this matcher by default.
+    see [EntMatcherLinker][linkingtk.algorithms.ea.entmatcher.EntMatcherLinker],
+    which uses this matcher by default.
     """
 
     def match(

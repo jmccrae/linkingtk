@@ -1,6 +1,7 @@
 """Fuzzy blocking strategy based on TF-IDF vector similarity.
 
-A non-neural, classical-ML alternative to :class:`~linkingtk.blocking.label_overlap.LabelOverlap`:
+A non-neural, classical-ML alternative to
+[LabelOverlap][linkingtk.blocking.label_overlap.LabelOverlap]:
 entities are compared by cosine similarity of vectors from a pluggable
 scikit-learn-style text vectorizer (TF-IDF by default) rather than surface-
 string overlap, so paraphrased or reordered text (e.g. a description and a
@@ -34,7 +35,7 @@ class EmbeddingSimilarityBlocker(BlockingStrategy):
     corpus) and projects ``dataset1`` into that same vector space, then for
     each ``dataset1`` entity retrieves the ``top_k`` closest ``dataset2``
     entities by cosine similarity via
-    :class:`sklearn.neighbors.NearestNeighbors`.
+    ``sklearn.neighbors.NearestNeighbors``.
 
     Args:
         field: Which text to compare entities on: ``"label"`` (all

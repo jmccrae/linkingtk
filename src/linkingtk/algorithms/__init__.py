@@ -1,4 +1,5 @@
-"""Task-specific linking algorithms built on top of :class:`BaseLinker`."""
+"""Task-specific linking algorithms built on top of
+[BaseLinker][linkingtk.algorithms.base.BaseLinker]."""
 
 from linkingtk.algorithms.base import BaseLinker
 from linkingtk.algorithms.feature_classifier import FeatureClassifierLinker

@@ -6,8 +6,8 @@ URL. Two GitHub repos rehost the same data as plain zips in an identical
 format instead -- ``github.com/DexterZeng/EntMatcher`` (DBP15K plus
 OpenEA's EN-FR/EN-DE/D-W/D-Y-15K sets) and
 ``github.com/jxh4945777/Simple-HHEA`` (ICEWS) -- which is what the
-concrete loaders in :mod:`~linkingtk.datasets.dbp15k`,
-:mod:`~linkingtk.datasets.openea` and :mod:`~linkingtk.datasets.icews`
+concrete loaders in [linkingtk.datasets.dbp15k][],
+[linkingtk.datasets.openea][] and [linkingtk.datasets.icews][]
 point at.
 """
 

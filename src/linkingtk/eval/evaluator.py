@@ -80,7 +80,7 @@ class Evaluator:
     ) -> EvaluationReport:
         """Compute Pair Completeness and Reduction Ratio for a blocking pass.
 
-        These metrics assess a :class:`~linkingtk.blocking.base.BlockingStrategy`
+        These metrics assess a [BlockingStrategy][linkingtk.blocking.base.BlockingStrategy]
         in isolation, before any linker scores the candidate pairs it produces.
 
         Args:

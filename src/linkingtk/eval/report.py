@@ -1,4 +1,4 @@
-"""Result container returned by :class:`linkingtk.eval.Evaluator`."""
+"""Result container returned by [linkingtk.eval.evaluator.Evaluator][]."""
 
 from __future__ import annotations
 

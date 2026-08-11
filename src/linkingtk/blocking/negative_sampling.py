@@ -1,15 +1,15 @@
 """Hard-negative sampling for training classical ML linkers.
 
 Mines the most *confusable* non-matching candidates per source entity from
-a :class:`~linkingtk.blocking.base.BlockingStrategy`, rather than sampling
+a [BlockingStrategy][linkingtk.blocking.base.BlockingStrategy], rather than sampling
 negatives uniformly at random from the full candidate pool — a blocking
 strategy already considered these plausible enough to surface, so they're
 more informative training signal for a classifier
-(`~linkingtk.algorithms.feature_classifier.FeatureClassifierLinker.fit`)
+([fit][linkingtk.algorithms.feature_classifier.FeatureClassifierLinker.fit])
 than a random draw. Shaped as a plain function over ``Entity``/
 ``BlockingStrategy`` (no dependency on ``TrainingArguments`` or anything
 ``Trainer``-specific) so it's equally usable by
-`~linkingtk.train.Trainer` once that's implemented.
+[Trainer][linkingtk.train.trainer.Trainer] once that's implemented.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def sample_hard_negatives(
     For each distinct source entity in ``ground_truth``, takes that
     entity's candidates from ``blocking.candidate_pairs(dataset1,
     dataset2)`` in the best-first order documented by
-    :meth:`~linkingtk.blocking.base.BlockingStrategy.candidate_pairs`,
+    [candidate_pairs][linkingtk.blocking.base.BlockingStrategy.candidate_pairs],
     excluding any candidate that is itself a true match for that source
     entity, up to ``top_k``.
 
@@ -52,7 +52,7 @@ def sample_hard_negatives(
 
     Returns:
         A flat list of ``(entity1, entity2)`` negative pairs, suitable as
-        :meth:`~linkingtk.algorithms.feature_classifier.FeatureClassifierLinker.fit`'s
+        [fit][linkingtk.algorithms.feature_classifier.FeatureClassifierLinker.fit]'s
         ``negatives`` argument. If you're about to pass the result straight
         to ``fit(..., blocking=blocking)``, note ``blocking.candidate_pairs()``
         runs once here and again inside ``fit()`` — fine at this class's

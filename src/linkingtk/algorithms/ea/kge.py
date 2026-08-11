@@ -40,10 +40,11 @@ _SEED_RELATION = "__seed_alignment__"
 class KGELinker(BaseLinker):
     """Scores candidate pairs by trained knowledge-graph-embedding similarity.
 
-    Must be :meth:`fit` before :meth:`link` can be called. Unlike
-    :class:`~linkingtk.algorithms.feature_classifier.FeatureClassifierLinker`,
+    Must be [fit][linkingtk.algorithms.ea.kge.KGELinker.fit] before
+    [link][linkingtk.algorithms.base.BaseLinker.link] can be called. Unlike
+    [FeatureClassifierLinker][linkingtk.algorithms.feature_classifier.FeatureClassifierLinker],
     training needs the KGs' relational structure, not just entity text --
-    see :meth:`fit`'s ``graph`` argument.
+    see [fit][linkingtk.algorithms.ea.kge.KGELinker.fit]'s ``graph`` argument.
 
     Args:
         model: A model name from pykeen's registry
@@ -67,8 +68,8 @@ class KGELinker(BaseLinker):
             ``0.01`` converges reliably in testing.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            `~linkingtk.algorithms.matching.GreedyMatcher`.
-            `~linkingtk.algorithms.matching.OptimalMatcher`'s dense
+            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher]'s dense
             Hungarian-algorithm cost matrix is explicitly not meant for
             KG-scale entity counts (see its docstring) -- avoid it here
             for anything but small graphs.
@@ -110,7 +111,7 @@ class KGELinker(BaseLinker):
                 triples (see the module docstring).
             graph: The combined relational structure of both KGs (e.g.
                 ``to_triples(graph1) + to_triples(graph2)`` from a
-                :class:`~linkingtk.datasets.base.GraphDatasetLoader`'s
+                [GraphDatasetLoader][linkingtk.datasets.base.GraphDatasetLoader]'s
                 ``load_graphs()``) -- entity ids on both sides must
                 already be disjoint, as they are from that loader.
             random_state: Seed for reproducible training. Left

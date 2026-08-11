@@ -3,9 +3,9 @@
 Source: https://github.com/jmccrae/wn-wd-entity-align's
 ``data/{subset}/jape/`` folders -- a URI-keyed relative of the
 ``ent_ids``/``triples`` zip format shared by
-:mod:`~linkingtk.datasets.dbp15k`/:mod:`~linkingtk.datasets.openea`/
-:mod:`~linkingtk.datasets.icews` (see :mod:`~linkingtk.datasets.kg_zip`'s
-module docstring), fetched per-file like :mod:`~linkingtk.datasets.naisc`
+[linkingtk.datasets.dbp15k][]/[linkingtk.datasets.openea][]/
+[linkingtk.datasets.icews][] (see ``linkingtk.datasets.kg_zip``'s
+module docstring), fetched per-file like [linkingtk.datasets.naisc][]
 rather than as a zip, since these files are individually small enough not
 to need it.
 
@@ -101,7 +101,9 @@ class WordNetWikidataOrganismsDataset(_WordNetWikidataDataset):
 
 
 class WordNetWikidataOrganismsHardDataset(_WordNetWikidataDataset):
-    """A harder variant of :class:`WordNetWikidataOrganismsDataset`.
+    """A harder variant of
+    [WordNetWikidataOrganismsDataset]
+    [linkingtk.datasets.wordnet_wikidata.WordNetWikidataOrganismsDataset].
 
     See that source repository's README for what makes it harder.
     """

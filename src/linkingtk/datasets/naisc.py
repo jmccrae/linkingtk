@@ -7,8 +7,8 @@ plus a reference alignment (``align.rdf``) listing known-correct class
 pairs between them. Both were originally used in the OAEI ontology
 matching campaigns; only the classes (not object/data properties) are
 loaded as entities here, which keeps both sides comfortably under 100
-entities for :class:`ConferenceDataset` and lets
-:meth:`Entity.description` stay unused (these ontologies rarely carry
+entities for [ConferenceDataset][linkingtk.datasets.naisc.ConferenceDataset] and lets
+``Entity.description`` stay unused (these ontologies rarely carry
 ``rdfs:comment``) in favor of just ``rdfs:label``.
 """
 
@@ -106,9 +106,11 @@ class ConferenceDataset(_NaiscToyDataset):
 class AnatomyDataset(_NaiscToyDataset):
     """The OAEI 'anatomy' track: mouse-anatomy vs. NCI Thesaurus ontologies.
 
-    Despite being listed alongside :class:`ConferenceDataset` as a toy
+    Despite being listed alongside
+    [ConferenceDataset][linkingtk.datasets.naisc.ConferenceDataset] as a toy
     dataset in Naisc, this is the full anatomy track (thousands of
-    classes per side) — use :class:`ConferenceDataset` if you need a
+    classes per side) — use
+    [ConferenceDataset][linkingtk.datasets.naisc.ConferenceDataset] if you need a
     dataset small enough for quick, exhaustive testing.
     """
 

@@ -1,4 +1,4 @@
-"""Configuration for :class:`linkingtk.train.Trainer` runs."""
+"""Configuration for [linkingtk.train.trainer.Trainer][] runs."""
 
 from __future__ import annotations
 

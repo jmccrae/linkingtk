@@ -19,7 +19,7 @@ class ToyEADataset(DatasetLoader):
 
     ``kg2``'s labels append the country name (e.g. ``"Paris, France"``), so
     an exact label match misses every pair — a blocking strategy tolerant
-    of partial overlap (e.g. `~linkingtk.blocking.label_overlap.LabelOverlap`)
+    of partial overlap (e.g. [LabelOverlap][linkingtk.blocking.label_overlap.LabelOverlap])
     is needed to find the candidates.
     """
 

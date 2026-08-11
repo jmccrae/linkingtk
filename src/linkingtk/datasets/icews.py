@@ -2,7 +2,7 @@
 
 Source: https://github.com/jxh4945777/Simple-HHEA's
 ``data/icews_wiki.zip`` -- same ``ent_ids``/``triples`` format as
-:mod:`~linkingtk.datasets.dbp15k`/:mod:`~linkingtk.datasets.openea`
+[linkingtk.datasets.dbp15k][]/[linkingtk.datasets.openea][]
 (``triples_N`` here has two extra trailing timestamp-id columns, ignored by
 the shared parser).
 

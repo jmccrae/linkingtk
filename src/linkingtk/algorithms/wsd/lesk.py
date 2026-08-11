@@ -15,7 +15,8 @@ from linkingtk.algorithms.string_similarity import StringSimilarityLinker
 class LeskLinker(StringSimilarityLinker):
     """WSD linker that scores candidate senses by context/gloss word overlap.
 
-    A preconfigured :class:`~linkingtk.algorithms.string_similarity.StringSimilarityLinker`
+    A preconfigured
+    [StringSimilarityLinker][linkingtk.algorithms.string_similarity.StringSimilarityLinker]
     (``source_field="context"``, ``target_field="description"``,
     ``metric="word_overlap"``) — see that class for the ranking and
     ``alternatives`` behavior. Kept as its own named class since Lesk is a

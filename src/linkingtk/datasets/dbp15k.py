@@ -1,6 +1,6 @@
 """Loaders for DBP15K, the classic cross-lingual DBpedia EA benchmark.
 
-Source: rehosted (see :mod:`~linkingtk.datasets.kg_zip` for why) at
+Source: rehosted (see ``linkingtk.datasets.kg_zip`` for why) at
 https://github.com/DexterZeng/EntMatcher's ``data.zip``, under
 ``data/{zh_en,ja_en,fr_en}/``.
 """

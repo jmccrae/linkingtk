@@ -10,7 +10,7 @@ implementation:
   shared character n-grams (fast, index-based, no edit-distance
   computation).
 * ``"levenshtein"``: candidates are ranked by normalized Levenshtein
-  distance, using the :class:`~linkingtk.blocking.trie.PatriciaTrie` for
+  distance, using the [PatriciaTrie][linkingtk.blocking.trie.PatriciaTrie] for
   an approximate nearest-neighbor search that stays tractable on larger
   datasets.
 
