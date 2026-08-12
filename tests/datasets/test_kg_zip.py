@@ -29,6 +29,9 @@ class _ToyDataset(_KGZipDataset):
 
     _folder = "toy"
     _ground_truth_files: ClassVar[tuple[str, ...]] = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
 
 
 class _ToyIcewsStyleDataset(_KGZipDataset):
@@ -36,6 +39,8 @@ class _ToyIcewsStyleDataset(_KGZipDataset):
 
     _folder = "icews_toy"
     _ground_truth_files: ClassVar[tuple[str, ...]] = ("ref_pairs", "sup_pairs")
+    _train_ground_truth_file = "sup_pairs"
+    _test_ground_truth_file = "ref_pairs"
 
 
 class TestEntitiesAndLabels:
@@ -70,6 +75,25 @@ class TestGroundTruth:
             ("icews_toy:1:0", "icews_toy:2:50"),
             ("icews_toy:1:1", "icews_toy:2:51"),
         ]
+
+
+class TestSplits:
+    def test_dbp15k_openea_style_train_test_val_split(self, tmp_path: Path) -> None:
+        dataset = _ToyDataset(zip_url=_zip_url(tmp_path, "kg_zip_toy", "toy"))
+        train, test, val = dataset.load_splits()
+
+        assert train == [("toy:1:0", "toy:2:100")]
+        assert test == [("toy:1:1", "toy:2:101")]
+        # val_ent_ids' only pair (2 -> 999) is dangling, like ill_ent_ids' third pair.
+        assert val == []
+
+    def test_icews_style_train_test_split_has_no_val(self, tmp_path: Path) -> None:
+        dataset = _ToyIcewsStyleDataset(zip_url=_zip_url(tmp_path, "kg_zip_icews_toy", "icews_toy"))
+        train, test, val = dataset.load_splits()
+
+        assert train == [("icews_toy:1:1", "icews_toy:2:51")]
+        assert test == [("icews_toy:1:0", "icews_toy:2:50")]
+        assert val == []
 
 
 class TestGraphs:
@@ -109,6 +133,26 @@ class TestConcreteDatasetWiring:
         dataset = IcewsWikiDataset()
         assert dataset._folder == "icews_wiki"
         assert dataset._ground_truth_files == ("ref_pairs", "sup_pairs")
+
+    def test_dbp15k_and_openea_variants_expose_native_splits(self) -> None:
+        for dataset in (
+            DBP15KZhEnDataset(),
+            DBP15KJaEnDataset(),
+            DBP15KFrEnDataset(),
+            EnFr15KDataset(),
+            EnDe15KDataset(),
+            DbpediaWikidata15KDataset(),
+            DbpediaYago15KDataset(),
+        ):
+            assert dataset._train_ground_truth_file == "sup_ent_ids"
+            assert dataset._test_ground_truth_file == "ref_ent_ids"
+            assert dataset._val_ground_truth_file == "val_ent_ids"
+
+    def test_icews_wiki_exposes_native_split_with_no_val(self) -> None:
+        dataset = IcewsWikiDataset()
+        assert dataset._train_ground_truth_file == "sup_pairs"
+        assert dataset._test_ground_truth_file == "ref_pairs"
+        assert dataset._val_ground_truth_file is None
 
     def test_zip_url_override_takes_precedence(self, tmp_path: Path) -> None:
         override = _zip_url(tmp_path, "kg_zip_toy", "toy")

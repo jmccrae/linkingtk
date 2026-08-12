@@ -31,6 +31,7 @@ nav:
       - String similarity (EA): examples/string_similarity_ea.md
       - Feature-based classifier (EA): examples/feature_classifier_ea.md
       - Knowledge graph embeddings (EA): examples/kge_ea.md
+      - KGE milestone benchmark (EA): examples/kge_benchmark.md
       - Hard-negative sampling: examples/negative_sampling.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
       - MVP benchmark: examples/mvp_benchmark.md

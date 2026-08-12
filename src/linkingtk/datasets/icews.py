@@ -24,3 +24,5 @@ class IcewsWikiDataset(_KGZipDataset):
     _zip_url = "https://raw.githubusercontent.com/jxh4945777/Simple-HHEA/main/data/icews_wiki.zip"
     _folder = "icews_wiki"
     _ground_truth_files = ("ref_pairs", "sup_pairs")
+    _train_ground_truth_file = "sup_pairs"
+    _test_ground_truth_file = "ref_pairs"

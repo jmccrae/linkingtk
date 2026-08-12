@@ -18,6 +18,9 @@ class DBP15KZhEnDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/zh_en"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
 
 
 class DBP15KJaEnDataset(_KGZipDataset):
@@ -26,6 +29,9 @@ class DBP15KJaEnDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/ja_en"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
 
 
 class DBP15KFrEnDataset(_KGZipDataset):
@@ -34,3 +40,6 @@ class DBP15KFrEnDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/fr_en"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"

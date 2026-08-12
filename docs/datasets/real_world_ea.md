@@ -16,6 +16,22 @@ in the same format — see each module's docstring for the exact source and
 the tradeoffs that come with it (e.g. only the 15K/V1 OpenEA sizes are
 available this way, and ICEWS's `icews_yago` variant isn't implemented).
 
+DBP15K, OpenEA and ICEWS also ship a native supervised train/test split of
+their ground truth (OpenEA/DBP15K additionally have a validation split;
+ICEWS doesn't) — `load_splits()` exposes it as `(train_pairs, test_pairs,
+val_pairs)`, separate from `load()`'s single concatenated `ground_truth`.
+This is what a real KGE-EA benchmark needs: the train pairs are added to
+the training graph as seed alignment triples, and the test pairs are held
+out for ranked evaluation — see the [KGE milestone
+benchmark](../examples/kge_benchmark.md) example. WordNet-Wikidata has no
+native split, so it doesn't implement `load_splits()`.
+
+```python
+from linkingtk.datasets import EnFr15KDataset
+
+train_pairs, test_pairs, val_pairs = EnFr15KDataset().load_splits()
+```
+
 ## DBP15K
 
 The classic cross-lingual DBpedia benchmark:

@@ -25,6 +25,9 @@ class EnFr15KDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/en_fr_15k_V1"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
 
 
 class EnDe15KDataset(_KGZipDataset):
@@ -33,6 +36,9 @@ class EnDe15KDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/en_de_15k_V1"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
 
 
 class DbpediaWikidata15KDataset(_KGZipDataset):
@@ -41,6 +47,9 @@ class DbpediaWikidata15KDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/dbp_wd_15k_V1"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
 
 
 class DbpediaYago15KDataset(_KGZipDataset):
@@ -49,3 +58,6 @@ class DbpediaYago15KDataset(_KGZipDataset):
     _zip_url = _ZIP_URL
     _folder = "data/dbp_yg_15k_V1"
     _ground_truth_files = ("ill_ent_ids",)
+    _train_ground_truth_file = "sup_ent_ids"
+    _test_ground_truth_file = "ref_ent_ids"
+    _val_ground_truth_file = "val_ent_ids"
