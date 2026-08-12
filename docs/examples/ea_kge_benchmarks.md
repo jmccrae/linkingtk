@@ -76,3 +76,36 @@ Metrics: {'Hits@1': 0.3972520509571133, 'Hits@10': 0.6532381778163143, 'MRR': 0.
 
 This exceeds MTransE's own published EN-FR-15K-V1 numbers outright
 (Hits@1=0.247, Hits@10=0.564, MRR=0.351).
+
+## IPTransE
+
+[`IPTransELinker`](../reference/algorithms.md) is a faithful reimplementation
+of IPTransE's (Zhu, Xu, Yang, Lin & Cheng, IJCAI 2017) actual training
+procedure, ported directly from
+[OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
+rather than from a from-scratch reading of the paper: seed pairs are given a
+single *shared* embedding row (not two rows plus a learned mapping, unlike
+MTransE), trained by minimizing a joint margin-based TransE loss plus a
+relation-composition ("path") loss over 2-hop chains, with negative sampling
+restricted to each KG's own entities. Every `bootstrap_every` epochs, an
+unsupervised self-training round finds new high-confidence matches by
+structural embedding similarity alone (no labels), turns their real edges
+into weighted pseudo-triples, and trains one extra epoch over them.
+
+```python
+--8<-- "examples/iptranse_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/iptranse_benchmark.py
+```
+
+```text
+3000 train / 1500 val / 10500 test pairs
+Metrics: {'Hits@1': 0.3454945641299273, 'Hits@10': 0.6532381778163143, 'MRR': 0.4492767259641801}
+```
+
+This exceeds IPTransE's own published EN-FR-15K-V1 numbers outright
+(Hits@1=0.169, Hits@10=0.390, MRR=0.243).

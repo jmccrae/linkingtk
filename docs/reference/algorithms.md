@@ -28,6 +28,10 @@
 
 ::: linkingtk.algorithms.ea.mtranse
 
+### IPTransE
+
+::: linkingtk.algorithms.ea.iptranse
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el
