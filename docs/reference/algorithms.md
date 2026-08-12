@@ -24,6 +24,10 @@
 
 ::: linkingtk.algorithms.ea.kge
 
+### MTransE
+
+::: linkingtk.algorithms.ea.mtranse
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el
