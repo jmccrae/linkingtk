@@ -8,7 +8,8 @@ a supporting graph is normally available. See DESIGN.md for references
 
 from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
 from linkingtk.algorithms.ea.iptranse import IPTransELinker
+from linkingtk.algorithms.ea.jape import JAPELinker
 from linkingtk.algorithms.ea.kge import KGELinker
 from linkingtk.algorithms.ea.mtranse import MTransELinker
 
-__all__ = ["EntMatcherLinker", "IPTransELinker", "KGELinker", "MTransELinker"]
+__all__ = ["EntMatcherLinker", "IPTransELinker", "JAPELinker", "KGELinker", "MTransELinker"]

@@ -67,6 +67,39 @@ en_entities, fr_entities, ground_truth = dataset.load()
 en_graph, fr_graph = dataset.load_graphs()
 ```
 
+## OpenEA (native format, with attributes)
+
+`EnFr15KDataset` above (and its siblings) come from a rehost with **no
+attribute triples at all** -- fine for structural methods (KGELinker,
+MTransE, IPTransE), but not for methods that use attribute signal (JAPE,
+and later AttrE/IMUSE/MultiKE). `EnFr15KAttrDataset` and its siblings load
+OpenEA's own native per-triple format instead (raw URIs, including
+`attr_triples_1`/`attr_triples_2`), rehosted on the Hugging Face Hub by the
+matchbench project.
+
+**Not a drop-in replacement** for the loaders above: cross-checked while
+building JAPE's benchmark (#28) by downloading both zips and comparing
+entity URI sets -- only ~10% of `EnFr15KDataset`'s entity URIs coincide
+with `EnFr15KAttrDataset`'s. They're two independently-sampled cuts of
+"EN-FR-15K" that happen to share the same official split-size ratios
+(20/10/70%), not the same entity roster. Use this family specifically when
+attribute triples are needed; use the loaders above otherwise (already
+used/verified by MTransE and IPTransE).
+
+- **`EnFr15KAttrDataset`/`EnDe15KAttrDataset`** — multilingual DBpedia
+  pairs, with attributes.
+- **`DbpediaWikidata15KAttrDataset`/`DbpediaYago15KAttrDataset`** —
+  homogeneous pairs, with attributes.
+
+```python
+from linkingtk.datasets import EnFr15KAttrDataset
+
+dataset = EnFr15KAttrDataset()
+en_entities, fr_entities, ground_truth = dataset.load()
+en_graph, fr_graph = dataset.load_graphs()
+en_attrs, fr_attrs = dataset.load_attribute_triples()
+```
+
 ## ICEWS
 
 A heterogeneous event-KG-to-Wikipedia pair, sharing DBP15K/OpenEA's

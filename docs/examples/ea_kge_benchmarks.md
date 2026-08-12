@@ -109,3 +109,45 @@ Metrics: {'Hits@1': 0.3454945641299273, 'Hits@10': 0.6532381778163143, 'MRR': 0.
 
 This exceeds IPTransE's own published EN-FR-15K-V1 numbers outright
 (Hits@1=0.169, Hits@10=0.390, MRR=0.243).
+
+## JAPE
+
+[`JAPELinker`](../reference/algorithms.md) is a faithful reimplementation
+of JAPE's (Sun, Hu & Li, ISWC 2017) actual training procedure, ported
+directly from [OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
+rather than from a from-scratch reading of the paper: a shared-id
+structural TransE embedding (trained via `pos_loss - neg_alpha * neg_loss`,
+no margin/hinge) is regularized by an **attribute-correlation embedding**
+-- a skip-gram-style model trained over which attribute predicates
+co-occur on the same entity, with seed pairs' attribute vocabularies
+merged for cross-lingual correlation signal. The resulting per-entity
+attribute similarity, thresholded to keep only confident correlations,
+pulls the structural embeddings of not-yet-seeded entities toward each
+other during joint training.
+
+**Note the different dataset**: `EnFr15KDataset` (used by the linkers
+above) has no attribute triples at all, so this uses
+[`EnFr15KAttrDataset`](../datasets/real_world_ea.md#openea-native-format-with-attributes)
+instead -- a different, independently-sampled rehost of "EN-FR-15K" with
+the same official split-size ratios but a different entity roster (see
+that section for why). JAPE's numbers below aren't from the identical
+entity sample as KGELinker's/MTransE's/IPTransE's above, though both are
+genuinely OpenEA's official EN-FR-15K-V1 release.
+
+```python
+--8<-- "examples/jape_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/jape_benchmark.py
+```
+
+```text
+3000 train / 1500 val / 10500 test pairs
+Metrics: {'Hits@1': 0.3134089392928619, 'Hits@10': 0.656837891927952, 'MRR': 0.4240979700752883}
+```
+
+This exceeds JAPE's own published EN-FR-15K-V1 numbers outright
+(Hits@1=0.263, Hits@10=0.595, MRR=0.372).

@@ -32,6 +32,10 @@
 
 ::: linkingtk.algorithms.ea.iptranse
 
+### JAPE
+
+::: linkingtk.algorithms.ea.jape
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el

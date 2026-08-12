@@ -16,6 +16,12 @@ from linkingtk.datasets.openea import (
     EnDe15KDataset,
     EnFr15KDataset,
 )
+from linkingtk.datasets.openea_native import (
+    DbpediaWikidata15KAttrDataset,
+    DbpediaYago15KAttrDataset,
+    EnDe15KAttrDataset,
+    EnFr15KAttrDataset,
+)
 from linkingtk.datasets.toy import ToyEADataset, ToyELDataset, ToyWSADataset, ToyWSDDataset
 from linkingtk.datasets.wordnet_wikidata import (
     WordNetWikidataLanguagesDataset,
@@ -40,6 +46,10 @@ __all__ = [
     "EnDe15KDataset",
     "DbpediaWikidata15KDataset",
     "DbpediaYago15KDataset",
+    "EnFr15KAttrDataset",
+    "EnDe15KAttrDataset",
+    "DbpediaWikidata15KAttrDataset",
+    "DbpediaYago15KAttrDataset",
     "IcewsWikiDataset",
     "WordNetWikidataLanguagesDataset",
     "WordNetWikidataLocationsDataset",

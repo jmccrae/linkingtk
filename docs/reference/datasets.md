@@ -20,6 +20,10 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 
 ::: linkingtk.datasets.openea
 
+## OpenEA (native format, with attributes)
+
+::: linkingtk.datasets.openea_native
+
 ## ICEWS
 
 ::: linkingtk.datasets.icews

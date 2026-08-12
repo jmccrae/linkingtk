@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from urllib.request import urlopen
 
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "linkingtk" / "downloads"
+_LITERAL_RE = re.compile(r'^"(.*)"(?:\^\^<[^>]*>|@[a-zA-Z-]+)?$')
 
 
 def local_name(uri: str) -> str:
@@ -25,6 +27,17 @@ def label_from_raw(raw: str) -> str:
     if raw.startswith(("http://", "https://")):
         return local_name(raw).replace("_", " ")
     return raw
+
+
+def parse_literal_value(raw: str) -> str:
+    """Strip an RDF literal's surrounding quotes and ``^^<datatype>``/``@lang`` suffix.
+
+    E.g. ``'"3.451E8"^^<http://dbpedia.org/datatype/usDollar>'`` ->
+    ``"3.451E8"``. Plain unquoted values (as this format also has, e.g.
+    ``"Left"``) pass through unchanged.
+    """
+    match = _LITERAL_RE.match(raw)
+    return match.group(1) if match else raw
 
 
 def fetch_cached(url: str, cache_dir: Path | None = None) -> bytes:
