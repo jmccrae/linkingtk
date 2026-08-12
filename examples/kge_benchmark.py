@@ -1,12 +1,14 @@
-"""KGE milestone acceptance demo: trains KGELinker on OpenEA's EN-FR-15K-V1
-dataset using its native train/test split and reports Hits@1, Hits@10, MRR
-via linkingtk.eval.Evaluator.evaluate_ranked.
+"""Trains KGELinker on OpenEA's EN-FR-15K-V1 dataset using its native
+train/test split and reports Hits@1, Hits@10, MRR via
+linkingtk.eval.Evaluator.evaluate_ranked.
 
 Train pairs are added to fit() as seed alignment triples (bridging the
 English and French DBpedia graphs); test pairs are held out and only used
 to score ranked predictions -- unlike kge_ea.py's fully-seeded
 pipeline-correctness demo, this measures genuine generalization to
-entities the model wasn't directly told to align.
+entities the model wasn't directly told to align. See
+docs/examples/ea_kge_benchmarks.md for methodology details and how this
+compares to other knowledge-graph-embedding EA linkers.
 
 Requires the `kge` optional dependency group (for `pykeen`) — install
 with `uv sync --extra kge`. Fetches a ~28MB zip over the network the

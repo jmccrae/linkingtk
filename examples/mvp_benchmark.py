@@ -1,4 +1,4 @@
-"""MVP milestone acceptance demo: string-similarity baselines on all four tasks.
+"""String-similarity baselines on all four tasks.
 
 Runs the same StringSimilarityLinker baseline (LeskLinker for WSD is a
 preconfigured instance of it) against a bundled toy dataset for each of Entity

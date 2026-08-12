@@ -11,7 +11,7 @@ common interface:
 This site is the generated API reference. For a quickstart and installation
 instructions, see the [README](https://github.com/jmccrae/linkingtk#readme).
 For the design rationale, task-to-`Entity` mapping, dataset references, and
-milestone roadmap, see
+development roadmap, see
 [DESIGN.md](https://github.com/jmccrae/linkingtk/blob/main/DESIGN.md).
 
 ## API Reference

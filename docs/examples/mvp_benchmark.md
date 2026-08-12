@@ -1,10 +1,12 @@
-# MVP milestone acceptance demo
+# Baseline across all four tasks
 
-This is the MVP milestone's acceptance demo: the same `StringSimilarityLinker`
-baseline (`LeskLinker` is a preconfigured instance of it) run against a
-[bundled toy dataset](../datasets/toy.md) for each of the four tasks —
-Entity Alignment, Entity Linking, Word Sense Disambiguation and Word Sense
-Alignment — each scored with [`Evaluator.evaluate`](../reference/eval.md).
+The same `StringSimilarityLinker` baseline (`LeskLinker` is a preconfigured
+instance of it) run against a [bundled toy dataset](../datasets/toy.md) for
+each of the four tasks — Entity Alignment, Entity Linking, Word Sense
+Disambiguation and Word Sense Alignment — each scored with
+[`Evaluator.evaluate`](../reference/eval.md). A good starting point for
+seeing the common interface work end-to-end before moving on to the
+task-specific examples.
 
 ```python
 --8<-- "examples/mvp_benchmark.py"

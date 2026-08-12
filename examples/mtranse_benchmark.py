@@ -1,12 +1,12 @@
-"""MTransE milestone acceptance demo: trains MTransELinker on OpenEA's
-EN-FR-15K-V1 dataset using its native train/test/validation split and
-reports Hits@1, Hits@10, MRR via linkingtk.eval.Evaluator.evaluate_ranked.
+"""Trains MTransELinker on OpenEA's EN-FR-15K-V1 dataset using its native
+train/test/validation split and reports Hits@1, Hits@10, MRR via
+linkingtk.eval.Evaluator.evaluate_ranked.
 
 Train pairs are used to train the cross-KG mapping matrix; validation
 pairs drive early stopping; test pairs are held out and only used to
 score ranked predictions -- this measures genuine generalization to
 entities the model wasn't directly told to align. See
-docs/examples/mtranse_benchmark.md for methodology details and
+docs/examples/ea_kge_benchmarks.md for methodology details and
 kge_benchmark.py for the (architecturally simpler) KGELinker equivalent.
 
 Requires the `kge` optional dependency group (for `torch`) — install

@@ -1,13 +1,14 @@
-# Real-world Entity Alignment datasets
+# Entity alignment datasets
 
-Unlike the toy and Naisc datasets, these are graph-heavy: each
+Unlike the [toy datasets](toy.md) (which also cover the Naisc
+ontology-matching benchmarks), these are graph-heavy: each
 [`GraphDatasetLoader`](../reference/datasets.md) exposes a `load_graphs()`
 method alongside `load()`, returning the two knowledge graphs' relation
 triples (`list[tuple[subject_id, predicate_id, object_id]]`) — the
 training data a KGE-based linker needs, not just entity labels. They fetch
 a multi-MB archive on first use and cache it under
 `~/.cache/linkingtk/downloads/` (skip this page if you just want a quick,
-offline example — see the [toy](toy.md)/[Naisc](naisc.md) datasets instead).
+offline example — see the [toy datasets](toy.md) instead).
 
 None of DESIGN.md's originally-named hosts (Google Drive for DBP15K,
 Dropbox/Figshare for OpenEA) are stable, programmatically fetchable URLs,
@@ -22,9 +23,9 @@ ICEWS doesn't) — `load_splits()` exposes it as `(train_pairs, test_pairs,
 val_pairs)`, separate from `load()`'s single concatenated `ground_truth`.
 This is what a real KGE-EA benchmark needs: the train pairs are added to
 the training graph as seed alignment triples, and the test pairs are held
-out for ranked evaluation — see the [KGE milestone
-benchmark](../examples/kge_benchmark.md) example. WordNet-Wikidata has no
-native split, so it doesn't implement `load_splits()`.
+out for ranked evaluation — see the [KGE method
+benchmarks](../examples/ea_kge_benchmarks.md) example. WordNet-Wikidata has
+no native split, so it doesn't implement `load_splits()`.
 
 ```python
 from linkingtk.datasets import EnFr15KDataset
@@ -89,7 +90,7 @@ see `IcewsWikiDataset`'s docstring for why.
 
 WordNet synsets aligned to Wikidata items, by topic. Fetched per-file (no
 zip), with the same `base_url`/`cache_dir` constructor override shape as
-[`ConferenceDataset`/`AnatomyDataset`](naisc.md):
+[`ConferenceDataset`/`AnatomyDataset`](toy.md#naisc-ontology-matching-datasets):
 
 - **`WordNetWikidataLanguagesDataset`** — language senses/items (the
   smallest subset — a good default).
