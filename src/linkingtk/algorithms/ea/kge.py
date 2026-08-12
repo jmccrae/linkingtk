@@ -29,7 +29,7 @@ from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
-from linkingtk.utils.graph import Graph, to_triples
+from linkingtk.utils.graph import Graph, build_id_mappings, map_triples_to_ids, to_triples
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -149,7 +149,13 @@ class KGELinker(BaseLinker):
             set_random_seed(random_state)
 
         triples = to_triples(graph) + [(s, _SEED_RELATION, t) for s, t in seed_pairs]
-        triples_factory = TriplesFactory.from_labeled_triples(np.array(triples, dtype=str))
+        entity_to_id, relation_to_id = build_id_mappings(triples)
+        mapped_triples = map_triples_to_ids(triples, entity_to_id, relation_to_id)
+        triples_factory = TriplesFactory(
+            mapped_triples=mapped_triples,
+            entity_to_id=entity_to_id,
+            relation_to_id=relation_to_id,
+        )
         model: Any = model_resolver.make(
             self.model,
             triples_factory=triples_factory,

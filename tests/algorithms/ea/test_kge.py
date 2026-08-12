@@ -1,10 +1,13 @@
+import numpy as np
 import pytest
+from pykeen.triples import TriplesFactory
 
 from linkingtk.algorithms.ea import KGELinker
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.eval import Evaluator
 from linkingtk.exceptions import LinkingTKError
+from linkingtk.utils.graph import build_id_mappings, map_triples_to_ids
 
 # Two isomorphic 4-node chains ("next"-linked), fully seeded (every
 # ground-truth pair is given to fit() as a seed alignment triple) -- this
@@ -61,6 +64,29 @@ class TestFitAndLink:
         results = linker.link(_KG1, _KG2, blocking=_AllPairs())
 
         assert {r.source_id for r in results} == {entity.id for entity in _KG1}
+
+
+class TestIdMappingMatchesPykeen:
+    def test_fit_uses_pykeen_compatible_id_mapping(self) -> None:
+        # Guards the fit() refactor from #12: build_id_mappings/
+        # map_triples_to_ids must reproduce exactly what
+        # TriplesFactory.from_labeled_triples built internally before that
+        # refactor, so training behavior is unchanged.
+        triples = _GRAPH + [(s, "__seed_alignment__", t) for s, t in _GROUND_TRUTH]
+        entity_to_id, relation_to_id = build_id_mappings(triples)
+        mapped = map_triples_to_ids(triples, entity_to_id, relation_to_id)
+
+        reference = TriplesFactory.from_labeled_triples(np.array(triples, dtype=str))
+
+        assert entity_to_id == reference.entity_to_id
+        assert relation_to_id == reference.relation_to_id
+        # Row order isn't semantically meaningful (pykeen's own row order
+        # here is a sorted-triples side effect, not a training
+        # requirement -- SLCWATrainingLoop shuffles anyway), so compare as
+        # sets of rows rather than exact list equality.
+        assert {tuple(row) for row in mapped.tolist()} == {
+            tuple(row) for row in reference.mapped_triples.tolist()
+        }
 
 
 class TestErrors:
