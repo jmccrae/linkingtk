@@ -36,6 +36,10 @@
 
 ::: linkingtk.algorithms.ea.jape
 
+### KDCoE
+
+::: linkingtk.algorithms.ea.kdcoe
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el
