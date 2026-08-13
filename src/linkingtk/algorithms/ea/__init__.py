@@ -8,6 +8,7 @@ a supporting graph is normally available. See DESIGN.md for references
 
 from linkingtk.algorithms.ea.attre import AttrELinker
 from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
+from linkingtk.algorithms.ea.imuse import IMUSELinker
 from linkingtk.algorithms.ea.iptranse import IPTransELinker
 from linkingtk.algorithms.ea.jape import JAPELinker
 from linkingtk.algorithms.ea.kdcoe import KDCoELinker
@@ -17,6 +18,7 @@ from linkingtk.algorithms.ea.mtranse import MTransELinker
 __all__ = [
     "AttrELinker",
     "EntMatcherLinker",
+    "IMUSELinker",
     "IPTransELinker",
     "JAPELinker",
     "KDCoELinker",

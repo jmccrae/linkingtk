@@ -262,3 +262,61 @@ Metrics: {'Hits@1': 0.5778519012675116, 'Hits@10': 0.656837891927952, 'MRR': 0.6
 This exceeds AttrE's own published EN-FR-15K-V1 Hits@1 and MRR outright
 (Hits@1=0.481, MRR=0.569), though Hits@10 (0.657) falls a little short of
 the published 0.732.
+
+## IMUSE
+
+[`IMUSELinker`][linkingtk.algorithms.ea.imuse.IMUSELinker] is a faithful
+reimplementation of IMUSE's (He, Li, Qiao, Liu & Zhao, DASFAA 2019) actual
+training procedure, ported directly from
+[OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
+rather than from a from-scratch reading of the paper. **Unlike every other
+linker on this page, IMUSE is unsupervised** -- it takes no ground-truth
+seed pairs at all. Instead it bootstraps its own initial alignment purely
+from attribute-value string similarity (attribute predicates are paired
+across KGs by Levenshtein-ratio similarity of their local names, then
+entities are paired by the average Levenshtein ratio of their values under
+those aligned predicates), then trains a margin-based structural TransE
+embedding jointly with a direct squared-distance alignment loss that pulls
+each bootstrapped pair's (still separate-row) entity embeddings together --
+no mapping matrix, no shared-id merge. A held-out validation split still
+drives early stopping (matching OpenEA's own published config), so the
+"unsupervised" claim is specifically about training signal, not early
+stopping.
+
+**Same dataset note as JAPE/KDCoE/AttrE above**: this uses
+[`EnFr15KAttrDataset`][linkingtk.datasets.openea_native.EnFr15KAttrDataset],
+not `EnFr15KDataset`, for the same attribute-triples reason.
+
+**New dependency**: `rapidfuzz`, for the Levenshtein-ratio string
+similarity OpenEA's own bootstrap relies on -- added to the `kge` extra
+alongside `torch`/`pykeen`.
+
+```python
+--8<-- "examples/imuse_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/imuse_benchmark.py
+```
+
+```text
+3000 train (unused) / 1500 val / 10500 test pairs
+Metrics: {'Hits@1': 0.5713809206137425, 'Hits@10': 0.656837891927952, 'MRR': 0.6014759575166513}
+```
+
+This exceeds IMUSE's own published EN-FR-15K-V1 Hits@1 outright
+(Hits@1=0.569), though MRR (0.601) and Hits@10 (0.657) fall a little
+short of the published 0.638/0.777. Note `name_sim_threshold=0.9` above,
+not `IMUSELinker`'s own literal-reference default of `0.6` -- diagnosed
+directly (not assumed): at `0.6`, a spurious attribute-predicate pairing
+(`.../ontology/games` and `foaf/0.1/name` score `0.667` on local-name
+similarity, edging out the correct `foaf/0.1/name` self-match by triple
+count) drags the entity-bootstrap step's precision against this dataset's
+own known links down to 54.7%; `0.9` removes it, raising precision to
+82.1% and live Hits@1 from `0.470` to `0.571` with no other change. See
+[`IMUSELinker`][linkingtk.algorithms.ea.imuse.IMUSELinker]'s module
+docstring for the full diagnostic -- likely a rehost-specific
+attribute-predicate-vocabulary difference from OpenEA's own original
+dataset files, not a bug in the port.

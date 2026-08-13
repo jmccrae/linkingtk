@@ -44,6 +44,10 @@
 
 ::: linkingtk.algorithms.ea.attre
 
+### IMUSE
+
+::: linkingtk.algorithms.ea.imuse
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el

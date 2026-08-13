@@ -16,7 +16,10 @@ dependencies = [
 [project.optional-dependencies]
 graph = ["networkx>=3.0", "rdflib>=7.0"]
 nlp = ["spacy>=3.7"]
-kge = ["pykeen>=1.10"]
+kge = [
+    "pykeen>=1.10",
+    "rapidfuzz>=3.14.5",
+]
 all = ["linkingtk[graph,nlp,kge]"]
 
 [dependency-groups]
