@@ -23,6 +23,39 @@ def test_evaluate_ranked_hits_and_mrr() -> None:
     assert report.metrics["MRR"] == 0.75
 
 
+def test_evaluate_ranked_ignores_predictions_outside_ground_truth() -> None:
+    # Regression test: a caller that links() a superset of the evaluated
+    # split (e.g. train+val+test entities, common in the EA-linker
+    # benchmark scripts under examples/) must not have those extra
+    # predictions dilute the denominator -- only `len(ground_truth)`
+    # queries are ever being scored.
+    report = Evaluator.evaluate_ranked(
+        ranked_predictions=[
+            ("e1", ["e1_target"]),
+            ("train_only_1", ["whatever"]),
+            ("train_only_2", ["whatever_else"]),
+        ],
+        ground_truth=[("e1", "e1_target")],
+        top_k=[1],
+    )
+    assert report.metrics["Hits@1"] == 1.0
+    assert report.metrics["MRR"] == 1.0
+
+
+def test_evaluate_ranked_counts_missing_prediction_as_a_miss() -> None:
+    # The flip side of the same bug: a ground-truth source with *no*
+    # matching entry in ranked_predictions at all (e.g. blocking found no
+    # candidates for it) must still count in the denominator as a miss,
+    # not be silently excluded.
+    report = Evaluator.evaluate_ranked(
+        ranked_predictions=[("e1", ["e1_target"])],
+        ground_truth=[("e1", "e1_target"), ("e2", "e2_target")],
+        top_k=[1],
+    )
+    assert report.metrics["Hits@1"] == 0.5
+    assert report.metrics["MRR"] == 0.5
+
+
 def test_evaluate_blocking_pair_completeness_and_reduction_ratio() -> None:
     report = Evaluator.evaluate_blocking(
         candidate_pairs=[("s1", "t1"), ("s2", "t2"), ("s2", "t3")],

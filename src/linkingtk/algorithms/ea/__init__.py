@@ -14,6 +14,7 @@ from linkingtk.algorithms.ea.jape import JAPELinker
 from linkingtk.algorithms.ea.kdcoe import KDCoELinker
 from linkingtk.algorithms.ea.kge import KGELinker
 from linkingtk.algorithms.ea.mtranse import MTransELinker
+from linkingtk.algorithms.ea.multike import MultiKELinker
 
 __all__ = [
     "AttrELinker",
@@ -24,4 +25,5 @@ __all__ = [
     "KDCoELinker",
     "KGELinker",
     "MTransELinker",
+    "MultiKELinker",
 ]

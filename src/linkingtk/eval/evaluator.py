@@ -39,9 +39,24 @@ class Evaluator:
     ) -> EvaluationReport:
         """Compute Hits@k and MRR for ranked predictions.
 
+        Iterates over ``ground_truth`` (not ``ranked_predictions``), so the
+        denominator is always exactly ``len(ground_truth)`` -- the number of
+        queries actually being scored. This matters for callers (e.g. every
+        EA-linker benchmark script under ``examples/``) that call
+        ``linker.link()`` over a *superset* of the evaluated split (train +
+        val + test entities, since which entities need embeddings is
+        determined before the split is known): a ground-truth source with no
+        matching entry in ``ranked_predictions`` at all (e.g. blocking found
+        no candidates for it) counts as a miss, exactly like a source whose
+        ranked list doesn't contain the correct target -- neither case is
+        silently excluded, and no non-ground-truth prediction can dilute the
+        denominator.
+
         Args:
             ranked_predictions: List of ``(source_id, ranked_target_ids)``
-                pairs, best candidate first.
+                pairs, best candidate first. May contain entries for
+                ``source_id``s absent from ``ground_truth`` -- those are
+                ignored rather than counted.
             ground_truth: List of ``(source_id, target_id)`` pairs.
             top_k: The cut-offs to compute Hits@k for.
 
@@ -49,14 +64,12 @@ class Evaluator:
             A report containing ``Hits@k`` for each ``k`` in ``top_k`` and
             ``MRR``.
         """
-        truth_by_source = dict(ground_truth)
+        ranked_ids_by_source = dict(ranked_predictions)
         hits = {k: 0 for k in top_k}
         reciprocal_ranks = []
 
-        for source_id, ranked_ids in ranked_predictions:
-            target_id = truth_by_source.get(source_id)
-            if target_id is None:
-                continue
+        for source_id, target_id in ground_truth:
+            ranked_ids = ranked_ids_by_source.get(source_id, [])
             if target_id in ranked_ids:
                 rank = ranked_ids.index(target_id) + 1
                 reciprocal_ranks.append(1.0 / rank)
@@ -66,7 +79,7 @@ class Evaluator:
             else:
                 reciprocal_ranks.append(0.0)
 
-        total = len(ranked_predictions) or 1
+        total = len(ground_truth) or 1
         metrics = {f"Hits@{k}": hits[k] / total for k in top_k}
         metrics["MRR"] = sum(reciprocal_ranks) / total
         return EvaluationReport(metrics=metrics)

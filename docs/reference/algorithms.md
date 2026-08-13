@@ -48,6 +48,10 @@
 
 ::: linkingtk.algorithms.ea.imuse
 
+### MultiKE
+
+::: linkingtk.algorithms.ea.multike
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el
