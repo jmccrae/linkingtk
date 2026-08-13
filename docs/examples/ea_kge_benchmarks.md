@@ -219,3 +219,46 @@ KG1 entities, 0.5% of KG2 entities -- see
 so most entities' "descriptions" are single-word label fallbacks (see
 `KDCoELinker`'s module docstring) rather than the rich descriptive text
 KDCoE's method -- and its published benchmark -- depends on.
+
+## AttrE
+
+[`AttrELinker`][linkingtk.algorithms.ea.attre.AttrELinker] is a faithful
+reimplementation of AttrE's (Trisedya, Qi & Zhang, AAAI 2019) actual
+training procedure, ported directly from
+[OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
+rather than from a from-scratch reading of the paper: a shared-id
+structural TransE embedding (the same "sharing" mechanism
+[`IPTransELinker`][linkingtk.algorithms.ea.iptranse.IPTransELinker]/
+[`JAPELinker`][linkingtk.algorithms.ea.jape.JAPELinker] use) is trained
+jointly with a *second*, independent character/attribute-embedding space
+-- attribute triples are treated as TransE-style triples themselves
+(`entity + attribute ≈ compose(value's characters)`), with each value's
+embedding built compositionally from its characters. A per-entity
+cosine-similarity ("joint") loss ties the two spaces together during
+training. Despite the paper's "attributes only" framing, OpenEA's own
+benchmarked implementation trains the structural half too -- this ports
+what's actually benchmarked, not a structure-free reduction (see
+`AttrELinker`'s module docstring).
+
+**Same dataset note as JAPE/KDCoE above**: this uses
+[`EnFr15KAttrDataset`][linkingtk.datasets.openea_native.EnFr15KAttrDataset],
+not `EnFr15KDataset`, for the same attribute-triples reason.
+
+```python
+--8<-- "examples/attre_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/attre_benchmark.py
+```
+
+```text
+3000 train / 1500 val / 10500 test pairs
+Metrics: {'Hits@1': 0.5778519012675116, 'Hits@10': 0.656837891927952, 'MRR': 0.6086628387178754}
+```
+
+This exceeds AttrE's own published EN-FR-15K-V1 Hits@1 and MRR outright
+(Hits@1=0.481, MRR=0.569), though Hits@10 (0.657) falls a little short of
+the published 0.732.

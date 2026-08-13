@@ -40,6 +40,10 @@
 
 ::: linkingtk.algorithms.ea.kdcoe
 
+### AttrE
+
+::: linkingtk.algorithms.ea.attre
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el
