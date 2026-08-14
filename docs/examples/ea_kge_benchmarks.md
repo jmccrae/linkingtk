@@ -8,11 +8,18 @@ MRR. Only the train split's pairs are added to the graph as seed alignment
 triples; the test split is held out and used only to score ranked
 predictions — a genuine generalization signal, not a pipeline-correctness
 check (compare to [the smaller `kge_ea.py` demo](kge_ea.md), which fully
-seeds every known alignment pair). Candidate generation uses
-[`LabelOverlap`](../reference/blocking.md) (not the tiny demos' `AllPairs`
-helper, which is infeasible at 15K entities/side) — viable here because
-many DBpedia entity labels are shared verbatim across the English/French
-sides.
+seeds every known alignment pair). Ranking is **exhaustive**: every
+test-source entity is ranked against every test-target entity directly
+from trained embeddings via
+[`rank_exhaustive`](../reference/eval.md), with no candidate-restriction
+step at all — matching OpenEA's own evaluation methodology
+(`greedy_alignment`), so these numbers are directly comparable to each
+method's published target.
+[`LabelOverlap`](../reference/blocking.md)-style blocking remains the
+right tool for production-scale linking (see [the smaller `kge_ea.py`
+demo](kge_ea.md)) but is deliberately not used for benchmark *scoring*
+here — see issue
+[#37](https://github.com/jmccrae/linkingtk/issues/37) for why.
 
 Requires the `kge` optional dependency group — install with
 `uv sync --extra kge`. Fetches a ~28MB zip over the network the first time
@@ -47,8 +54,18 @@ uv run python examples/kge_benchmark.py
 
 ```text
 3000 train / 10500 test pairs
-Metrics: {'Hits@1': 0.10104761904761905, 'Hits@10': 0.9327619047619048, 'MRR': 0.28606296296296296}
+Metrics: {'Hits@1': 9.523809523809524e-05, 'Hits@10': 0.0013333333333333333, 'MRR': 0.0011284690886909938}
 ```
+
+**Near chance level under exhaustive ranking** (chance Hits@1 over a
+~10500-entity test-target pool is ~0.0000952, essentially identical to
+the number above). The much higher blocking-restricted number this
+section previously reported (Hits@1=0.101) came almost entirely from
+`LabelOverlap` narrowing the candidate pool to at most 10 entities before
+KGE's weak embeddings ever had to rank anything -- consistent with this
+linker's own documented framing as "a simple, generic trick rather than a
+reproduction of a specific published method," not a real EA method with
+learned cross-lingual structure.
 
 ## MTransE
 
@@ -77,11 +94,20 @@ uv run python examples/mtranse_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.5672380952380952, 'Hits@10': 0.9327619047619048, 'MRR': 0.6999277777777778}
+Metrics: {'Hits@1': 0.06533333333333333, 'Hits@10': 0.26095238095238094, 'MRR': 0.13192045857536516}
 ```
 
-This exceeds MTransE's own published EN-FR-15K-V1 numbers outright
-(Hits@1=0.247, Hits@10=0.564, MRR=0.351).
+**Falls well short of MTransE's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.247, Hits@10=0.564, MRR=0.351) once ranking is genuinely
+exhaustive -- this section previously reported Hits@1=0.567,
+*exceeding* the published number, but that number came from
+`LabelOverlap(max_matches=10)` blocking restricting every source
+entity's candidate pool to at most 10 before scoring. MTransE's shared
+TransE embedding space plus a single learned mapping matrix apparently
+doesn't discriminate well across the full ~10500-entity test-target
+pool, even though it's nearly always right when only a handful of
+plausible (label-similar) candidates are under consideration. See
+[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
 
 ## IPTransE
 
@@ -110,11 +136,14 @@ uv run python examples/iptranse_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.49323809523809525, 'Hits@10': 0.9327619047619048, 'MRR': 0.6415356386999244}
+Metrics: {'Hits@1': 0.11695238095238095, 'Hits@10': 0.2885714285714286, 'MRR': 0.1770713003174724}
 ```
 
-This exceeds IPTransE's own published EN-FR-15K-V1 numbers outright
-(Hits@1=0.169, Hits@10=0.390, MRR=0.243).
+**Falls short of IPTransE's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.169, Hits@10=0.390, MRR=0.243) once ranking is genuinely
+exhaustive -- same finding as MTransE above (this section previously
+reported a blocking-inflated Hits@1=0.493). See
+[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
 
 ## JAPE
 
@@ -152,11 +181,17 @@ uv run python examples/jape_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.4478095238095238, 'Hits@10': 0.9377142857142857, 'MRR': 0.6055761904761905}
+Metrics: {'Hits@1': 0.05838095238095238, 'Hits@10': 0.23866666666666667, 'MRR': 0.12116213264596698}
 ```
 
-This exceeds JAPE's own published EN-FR-15K-V1 numbers outright
-(Hits@1=0.263, Hits@10=0.595, MRR=0.372).
+**Falls well short of JAPE's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.263, Hits@10=0.595, MRR=0.372) once ranking is genuinely
+exhaustive -- same finding as MTransE/IPTransE above (this section
+previously reported a blocking-inflated Hits@1=0.448). The
+attribute-correlation regularizer clearly isn't enough on its own to
+make the structural embedding discriminate well across the full
+test-target pool. See
+[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
 
 ## KDCoE
 
@@ -199,41 +234,38 @@ uv run python examples/kdcoe_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.5412380952380952, 'Hits@10': 0.9377142857142857, 'MRR': 0.6745544217687075}
+Metrics: {'Hits@1': 0.061047619047619045, 'Hits@10': 0.2338095238095238, 'MRR': 0.11854192788671802}
 ```
 
-**Hits@1 still falls a little short of KDCoE's own published EN-FR-15K-V1
-number** (0.581 vs. 0.541 here), though Hits@10 (0.938) and MRR (0.675)
-now exceed the published 0.721/0.628 -- unlike the pre-fix numbers below,
-where all three metrics fell short. Investigated directly rather than
-assumed: a diagnostic run found the description encoder's cosine
+**Falls well short of KDCoE's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.581, Hits@10=0.721, MRR=0.628) once ranking is genuinely
+exhaustive -- this section previously reported a blocking-inflated
+Hits@1=0.541 (with Hits@10/MRR that even exceeded the published
+numbers). Under exhaustive ranking, KDCoE's structural+mapping half now
+scores close to (in fact slightly below) plain
+[`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker]'s own
+exhaustive numbers on this dataset -- consistent with the diagnostic
+below, which already found the co-trained description signal wasn't
+adding real value on this dataset, just measured against a
+blocking-inflated baseline at the time. Investigated directly rather
+than assumed: a diagnostic run found the description encoder's cosine
 similarities saturate near `1.0` for ~99.9% of reference-pool pairs
 regardless of correctness (median ~0.9998), so `desc_sim_th` couldn't act
 as a confidence filter -- feeding that many low-precision pairs into the
 structural mapping loss collapsed structural Hits@1 from a clean ~0.40 to
 near-zero (see `KDCoELinker`'s module docstring for the fix:
 description-found and structurally-found bootstrap pairs are now tracked
-and fed back separately). That fix alone recovered Hits@1 from 0.343 to
-0.386 (pre-evaluator-fix numbers); co-training still only roughly matches
-a plain structural-only
-[`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker] baseline
-measured on this exact dataset/split -- the description signal isn't
-adding the value the published number implies. The likely root cause is
-data availability rather than a training bug: `EnFr15KAttrDataset`'s real
+and fed back separately). The likely root cause is data availability
+rather than a training bug: `EnFr15KAttrDataset`'s real
 `.../description`-predicate attribute-triple coverage is sparse (10.5% of
 KG1 entities, 0.5% of KG2 entities -- see
 [the datasets page](../datasets/real_world_ea.md#openea-native-format-with-attributes)),
 so most entities' "descriptions" are single-word label fallbacks (see
 `KDCoELinker`'s module docstring) rather than the rich descriptive text
-KDCoE's method -- and its published benchmark -- depends on. **Note**: the
-numbers above (and every other section on this page) were re-run after
-fixing a denominator bug in
-[`Evaluator.evaluate_ranked`][linkingtk.eval.evaluator.Evaluator.evaluate_ranked]
-(see the MultiKE section below) -- KDCoE's own diagnostic investigation
-above predates that fix and used the older, deflated numbers throughout
-(0.343/0.386 are as originally measured, not re-verified against the
-fix), but the sparse-description-data root cause is independent of the
-evaluator bug and still explains the remaining Hits@1 gap.
+KDCoE's method -- and its published benchmark -- depends on. See
+[issue #37](https://github.com/jmccrae/linkingtk/issues/37) for the
+exhaustive-vs-blocking finding common to MTransE/IPTransE/JAPE/KDCoE
+above.
 
 ## AttrE
 
@@ -271,11 +303,17 @@ uv run python examples/attre_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.8234285714285714, 'Hits@10': 0.9377142857142857, 'MRR': 0.8681930461073318}
+Metrics: {'Hits@1': 0.6266666666666667, 'Hits@10': 0.836, 'MRR': 0.700697693983391}
 ```
 
-This exceeds AttrE's own published EN-FR-15K-V1 numbers outright across
-all three metrics (Hits@1=0.481, Hits@10=0.732, MRR=0.569).
+Still exceeds AttrE's own published EN-FR-15K-V1 numbers across all
+three metrics (Hits@1=0.481, Hits@10=0.732, MRR=0.569), though by a
+smaller margin than the blocking-restricted number this section
+previously reported (Hits@1=0.823) -- unlike MTransE/IPTransE/JAPE/KDCoE
+above, AttrE's character/attribute-embedding half gives it enough
+discriminative signal to keep clearing its target under genuinely
+exhaustive ranking. See
+[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
 
 ## IMUSE
 
@@ -317,23 +355,23 @@ uv run python examples/imuse_benchmark.py
 
 ```text
 3000 train (unused) / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.8106666666666666, 'Hits@10': 0.9377142857142857, 'MRR': 0.8555479591836734}
+Metrics: {'Hits@1': 0.6746666666666666, 'Hits@10': 0.795047619047619, 'MRR': 0.7147113857910671}
 ```
 
-This exceeds IMUSE's own published EN-FR-15K-V1 numbers outright across
-all three metrics (Hits@1=0.569, Hits@10=0.777, MRR=0.638). Note
+Still exceeds IMUSE's own published EN-FR-15K-V1 numbers across all
+three metrics (Hits@1=0.569, Hits@10=0.777, MRR=0.638), though by a
+smaller margin than the blocking-restricted number this section
+previously reported (Hits@1=0.811) -- like AttrE above, IMUSE's
+attribute-value bootstrap gives it enough discriminative signal to keep
+clearing its target under genuinely exhaustive ranking. See
+[issue #37](https://github.com/jmccrae/linkingtk/issues/37). Note
 `name_sim_threshold=0.9` above, not `IMUSELinker`'s own literal-reference
 default of `0.6` -- diagnosed directly (not assumed): at `0.6`, a
 spurious attribute-predicate pairing (`.../ontology/games` and
 `foaf/0.1/name` score `0.667` on local-name similarity, edging out the
 correct `foaf/0.1/name` self-match by triple count) drags the
 entity-bootstrap step's precision against this dataset's own known links
-down to 54.7%; `0.9` removes it, raising precision to 82.1% (this
-particular before/after comparison predates the evaluator-denominator fix
-described in the MultiKE section below, so the `0.470`/`0.571` Hits@1
-figures it was originally diagnosed against are the older, deflated
-numbers -- the relative improvement from the threshold change itself
-still holds). See
+down to 54.7%; `0.9` removes it, raising precision to 82.1%. See
 [`IMUSELinker`][linkingtk.algorithms.ea.imuse.IMUSELinker]'s module
 docstring for the full diagnostic -- likely a rehost-specific
 attribute-predicate-vocabulary difference from OpenEA's own original
@@ -377,30 +415,43 @@ uv run python examples/multike_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.8738095238095238, 'Hits@10': 0.9377142857142857, 'MRR': 0.897093008314437}
+Metrics: {'Hits@1': 0.8467619047619047, 'Hits@10': 0.9185714285714286, 'MRR': 0.8714352203977747}
 ```
 
-This comfortably clears both the acceptance target (Hits@1 >= 0.674) and
-OpenEA's own published Hits@1 (0.749) outright. Getting a trustworthy
-number here surfaced a real, pre-existing bug in
+Still comfortably clears both the acceptance target (Hits@1 >= 0.674)
+and OpenEA's own published Hits@1 (0.749) under genuinely exhaustive
+ranking -- the strongest result on this page, and (along with AttrE and
+IMUSE) proof that a real, well-signaled EA method holds up without
+blocking's help; this section previously reported a blocking-inflated
+Hits@1=0.874.
+
+Getting a trustworthy number here originally surfaced a real,
+pre-existing bug in
 [`Evaluator.evaluate_ranked`][linkingtk.eval.evaluator.Evaluator.evaluate_ranked]
-affecting every benchmark on this page (not just MultiKE): every script
-here calls `link()` over the *full* entity set (train+val+test) since
-which entities need embeddings is decided before the split is known, but
-`evaluate_ranked` was dividing by `len(ranked_predictions)` (all linked
-entities) rather than `len(ground_truth)` (only the test split) --
-diluting every reported Hits@k/MRR number by the ratio of
-non-test-set-entities to test-set entities (roughly 1.43x on
-`EnFr15KAttrDataset`). Confirmed directly: MultiKE's *un*trained,
-name-embedding-only baseline went from Hits@1=0.593 (the bug) to
-Hits@1=0.848 (fixed) on the exact same predictions. Now fixed in
-`evaluate_ranked` itself (iterates over `ground_truth`, so both a missing
-prediction *and* an extra non-ground-truth prediction are handled
-correctly) -- every number on this page has been re-run and updated
-against the fix. See
-[issue #37](https://github.com/jmccrae/linkingtk/issues/37) for a related,
-separate finding: blocking (`LabelOverlap(max_matches=10)`) still caps
-what these numbers can reach, since it restricts candidates *before*
-ranking, unlike OpenEA's own exhaustive (no-blocking) evaluation --
-diagnosed blocking recall on this split is ~93.8%, which is why Hits@10
-above sits so close to that ceiling regardless of embedding quality.
+affecting every benchmark on this page: every script here calls `link()`
+over the *full* entity set (train+val+test) since which entities need
+embeddings is decided before the split is known, but `evaluate_ranked`
+was dividing by `len(ranked_predictions)` (all linked entities) rather
+than `len(ground_truth)` (only the test split) -- diluting every
+reported Hits@k/MRR number by the ratio of non-test-set entities to
+test-set entities (roughly 1.43x on `EnFr15KAttrDataset`). That's fixed
+in `evaluate_ranked` itself (iterates over `ground_truth`, so both a
+missing prediction *and* an extra non-ground-truth prediction are
+handled correctly).
+
+That fix alone wasn't the full story, though: even with it, every
+benchmark script still scored predictions via
+`LabelOverlap(max_matches=10)` blocking, restricting each source
+entity's candidate pool to at most 10 before the linker's own embeddings
+ever ranked anything -- a structurally different (and easier) task than
+OpenEA's own published methodology, which ranks every test-source entity
+against the *full* test-target pool (`greedy_alignment`, no candidate
+restriction). [Issue #37](https://github.com/jmccrae/linkingtk/issues/37)
+replaced blocking-restricted benchmark scoring with
+[`rank_exhaustive`](../reference/eval.md), matching OpenEA's methodology
+exactly -- every number on this page reflects that. The result was not
+uniform: MTransE, IPTransE, JAPE and KDCoE (structural-embedding-only or
+weakly-regularized methods) all now fall well short of their published
+targets once ranking is genuinely exhaustive, while AttrE, IMUSE and
+MultiKE (all backed by strong attribute-value signal) still clear
+theirs. See each section above for details.

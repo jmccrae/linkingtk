@@ -62,6 +62,15 @@ class TestFitAndLink:
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
 
+    def test_source_and_target_embedding_are_identical(self) -> None:
+        linker = IPTransELinker(embedding_dim=16, num_epochs=20, bootstrap_every=1000)
+        linker.fit(_KG1, _KG2, _GROUND_TRUTH, graph=_GRAPH, random_state=0)
+
+        entity_id = _KG1[0].id
+        assert np.array_equal(
+            linker.source_embedding(entity_id), linker.target_embedding(entity_id)
+        )
+
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
     def test_recovers_seeded_alignment_on_cuda(self) -> None:
         linker = IPTransELinker(

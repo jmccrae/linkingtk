@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 
@@ -67,6 +68,19 @@ class TestFitAndLink:
 
         results = linker.link(_KG1, _KG2, blocking=_AllPairs())
         assert {r.source_id for r in results} == {entity.id for entity in _KG1}
+
+    def test_source_embedding_differs_from_target_embedding(self) -> None:
+        # MTransE projects the source side through the learned mapping
+        # matrix but scores the target side raw -- source_embedding/
+        # target_embedding must preserve that asymmetry for
+        # rank_exhaustive to score correctly.
+        linker = MTransELinker(embedding_dim=16, num_epochs=50, batch_size=32)
+        linker.fit(_KG1, _KG2, _GROUND_TRUTH, graph=_GRAPH, random_state=0)
+
+        entity_id = _KG1[0].id
+        assert not np.allclose(
+            linker.source_embedding(entity_id), linker.target_embedding(entity_id)
+        )
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
     def test_recovers_seeded_alignment_on_cuda(self) -> None:

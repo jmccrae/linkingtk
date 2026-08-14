@@ -6,7 +6,10 @@ Train pairs are added to fit() as seed alignment triples (bridging the
 English and French DBpedia graphs); test pairs are held out and only used
 to score ranked predictions -- unlike kge_ea.py's fully-seeded
 pipeline-correctness demo, this measures genuine generalization to
-entities the model wasn't directly told to align. See
+entities the model wasn't directly told to align. Ranking is exhaustive
+(every test-source entity against every test-target entity, via
+linkingtk.eval.rank_exhaustive, no blocking/candidate restriction),
+matching OpenEA's own evaluation methodology -- see
 docs/examples/ea_kge_benchmarks.md for methodology details and how this
 compares to other knowledge-graph-embedding EA linkers.
 
@@ -21,9 +24,8 @@ Run with: `uv run python examples/kge_benchmark.py`
 from __future__ import annotations
 
 from linkingtk.algorithms.ea import KGELinker
-from linkingtk.blocking import LabelOverlap
 from linkingtk.datasets import EnFr15KDataset
-from linkingtk.eval import Evaluator
+from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 
@@ -36,9 +38,14 @@ def main() -> None:
 
     linker = KGELinker(num_epochs=20)  # TransE, embedding_dim=50
     linker.fit(entities1, entities2, ground_truth=train_pairs, graph=graph, random_state=0)
-    results = linker.link(entities1, entities2, blocking=LabelOverlap(max_matches=10))
 
-    ranked_predictions = [(r.source_id, [r.target_id, *r.alternatives]) for r in results]
+    test_source_ids = {s for s, _ in test_pairs}
+    test_target_ids = {t for _, t in test_pairs}
+    ranked_predictions = rank_exhaustive(
+        linker,
+        [e for e in entities1 if e.id in test_source_ids],
+        [e for e in entities2 if e.id in test_target_ids],
+    )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
     print(f"{len(train_pairs)} train / {len(test_pairs)} test pairs")
     print("Metrics:", report.metrics)

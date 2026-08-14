@@ -739,14 +739,22 @@ class MultiKELinker(BaseLinker):
 
         candidates_by_source: dict[str, list[tuple[str, float]]] = {}
         for source_id, target_ids in target_ids_by_source.items():
-            source_vector = self._embedding(source_id).reshape(1, -1)
-            target_matrix = np.stack([self._embedding(target_id) for target_id in target_ids])
+            source_vector = self.source_embedding(source_id).reshape(1, -1)
+            target_matrix = np.stack([self.target_embedding(target_id) for target_id in target_ids])
             scores = cosine_similarity(source_vector, target_matrix)[0]
             candidates_by_source[source_id] = list(
                 zip(target_ids, (float(score) for score in scores), strict=True)
             )
 
         return self.matching.match(candidates_by_source)
+
+    def source_embedding(self, entity_id: str) -> npt.NDArray[np.floating[Any]]:
+        """Vector used to score ``entity_id`` as a scored pair's source side."""
+        return self._embedding(entity_id)
+
+    def target_embedding(self, entity_id: str) -> npt.NDArray[np.floating[Any]]:
+        """Vector used to score ``entity_id`` as a scored pair's target side."""
+        return self._embedding(entity_id)
 
     def _embedding(self, entity_id: str) -> npt.NDArray[np.floating[Any]]:
         vector = self._id_to_vector.get(entity_id)

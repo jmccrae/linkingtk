@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 
@@ -78,6 +79,22 @@ class TestFitAndLink:
 
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
+
+    def test_source_and_target_embedding_are_identical(self) -> None:
+        linker = IMUSELinker(embedding_dim=16, num_epochs=50, batch_size=32, learning_rate=0.5)
+        linker.fit(
+            _KG1,
+            _KG2,
+            graph=_GRAPH,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+            random_state=0,
+        )
+
+        entity_id = _KG1[0].id
+        assert np.array_equal(
+            linker.source_embedding(entity_id), linker.target_embedding(entity_id)
+        )
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
     def test_bootstrap_recovers_alignment_without_ground_truth_on_cuda(self) -> None:

@@ -6,8 +6,9 @@ per-method acceptance criteria (#31).
 Reuses tests/fixtures/openea_native_kge_benchmark_toy/ (built for JAPE's
 benchmark test, #28, also reused by KDCoE #29) -- structural-sanity-only
 assertions, same rationale as the rest of the family's benchmark tests.
-See examples/attre_benchmark.py for the same methodology at real dataset
-scale.
+Ranking is exhaustive (via linkingtk.eval.rank_exhaustive, no blocking),
+matching OpenEA's own evaluation methodology. See examples/attre_benchmark.py
+for the same methodology at real dataset scale.
 """
 
 from __future__ import annotations
@@ -17,10 +18,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from linkingtk.algorithms.ea import AttrELinker
-from linkingtk.blocking.base import BlockingStrategy
-from linkingtk.core.entity import Entity
 from linkingtk.datasets.openea_native import _OpenEANativeDataset
-from linkingtk.eval import Evaluator
+from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "openea_native_kge_benchmark_toy"
@@ -38,15 +37,6 @@ def _zip_url(tmp_path: Path) -> str:
         for file in _FIXTURES_DIR.iterdir():
             archive.write(file, arcname=file.name)
     return f"file://{zip_path}"
-
-
-class _AllPairs(BlockingStrategy):
-    """Lets every pair through -- see test_attre.py's identical helper."""
-
-    def candidate_pairs(
-        self, dataset1: list[Entity], dataset2: list[Entity]
-    ) -> list[tuple[Entity, Entity]]:
-        return [(e1, e2) for e1 in dataset1 for e2 in dataset2]
 
 
 def test_attre_linker_reports_ranked_metrics_on_held_out_split(tmp_path: Path) -> None:
@@ -73,9 +63,13 @@ def test_attre_linker_reports_ranked_metrics_on_held_out_split(tmp_path: Path) -
         attribute_triples2=attrs2,
         random_state=0,
     )
-    results = linker.link(entities1, entities2, blocking=_AllPairs())
-
-    ranked_predictions = [(r.source_id, [r.target_id, *r.alternatives]) for r in results]
+    test_source_ids = {s for s, _ in test_pairs}
+    test_target_ids = {t for _, t in test_pairs}
+    ranked_predictions = rank_exhaustive(
+        linker,
+        [e for e in entities1 if e.id in test_source_ids],
+        [e for e in entities2 if e.id in test_target_ids],
+    )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
 
     assert set(report.metrics) == {"Hits@1", "Hits@10", "MRR"}

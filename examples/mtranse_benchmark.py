@@ -5,7 +5,10 @@ linkingtk.eval.Evaluator.evaluate_ranked.
 Train pairs are used to train the cross-KG mapping matrix; validation
 pairs drive early stopping; test pairs are held out and only used to
 score ranked predictions -- this measures genuine generalization to
-entities the model wasn't directly told to align. See
+entities the model wasn't directly told to align. Ranking is exhaustive
+(every test-source entity against every test-target entity, via
+linkingtk.eval.rank_exhaustive, no blocking/candidate restriction),
+matching OpenEA's own evaluation methodology -- see
 docs/examples/ea_kge_benchmarks.md for methodology details and
 kge_benchmark.py for the (architecturally simpler) KGELinker equivalent.
 
@@ -20,9 +23,8 @@ Run with: `uv run python examples/mtranse_benchmark.py`
 from __future__ import annotations
 
 from linkingtk.algorithms.ea import MTransELinker
-from linkingtk.blocking import LabelOverlap
 from linkingtk.datasets import EnFr15KDataset
-from linkingtk.eval import Evaluator
+from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 
@@ -44,9 +46,13 @@ def main() -> None:
         patience=5,
         eval_every=10,
     )
-    results = linker.link(entities1, entities2, blocking=LabelOverlap(max_matches=10))
-
-    ranked_predictions = [(r.source_id, [r.target_id, *r.alternatives]) for r in results]
+    test_source_ids = {s for s, _ in test_pairs}
+    test_target_ids = {t for _, t in test_pairs}
+    ranked_predictions = rank_exhaustive(
+        linker,
+        [e for e in entities1 if e.id in test_source_ids],
+        [e for e in entities2 if e.id in test_target_ids],
+    )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
     print(f"{len(train_pairs)} train / {len(val_pairs)} val / {len(test_pairs)} test pairs")
     print("Metrics:", report.metrics)

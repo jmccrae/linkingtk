@@ -13,7 +13,10 @@ docs/datasets/real_world_ea.md and linkingtk.datasets.openea_native's
 module docstring for why. Train pairs seed the shared embedding table and
 merge attribute vocabularies for cross-lingual correlation training;
 validation pairs drive early stopping; test pairs are held out and only
-used to score ranked predictions.
+used to score ranked predictions. Ranking is exhaustive (every
+test-source entity against every test-target entity, via
+linkingtk.eval.rank_exhaustive, no blocking/candidate restriction),
+matching OpenEA's own evaluation methodology.
 
 Requires the `kge` optional dependency group (for `torch`) — install
 with `uv sync --extra kge`. Fetches a multi-MB zip over the network the
@@ -25,9 +28,8 @@ Run with: `uv run python examples/jape_benchmark.py`
 from __future__ import annotations
 
 from linkingtk.algorithms.ea import JAPELinker
-from linkingtk.blocking import LabelOverlap
 from linkingtk.datasets import EnFr15KAttrDataset
-from linkingtk.eval import Evaluator
+from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 
@@ -52,9 +54,13 @@ def main() -> None:
         attribute_triples1=attribute_triples1,
         attribute_triples2=attribute_triples2,
     )
-    results = linker.link(entities1, entities2, blocking=LabelOverlap(max_matches=10))
-
-    ranked_predictions = [(r.source_id, [r.target_id, *r.alternatives]) for r in results]
+    test_source_ids = {s for s, _ in test_pairs}
+    test_target_ids = {t for _, t in test_pairs}
+    ranked_predictions = rank_exhaustive(
+        linker,
+        [e for e in entities1 if e.id in test_source_ids],
+        [e for e in entities2 if e.id in test_target_ids],
+    )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
     print(f"{len(train_pairs)} train / {len(val_pairs)} val / {len(test_pairs)} test pairs")
     print("Metrics:", report.metrics)

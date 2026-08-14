@@ -131,6 +131,33 @@ class TestFitAndLink:
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
 
+    def test_source_embedding_differs_from_target_embedding(self, tmp_path: Path) -> None:
+        # KDCoE projects the source side through the learned mapping
+        # matrix but scores the target side raw, same as MTransE --
+        # source_embedding/target_embedding must preserve that asymmetry.
+        linker = KDCoELinker(
+            embedding_dim=16,
+            num_epochs=20,
+            batch_size=32,
+            wv_dim=_WV_DIM,
+            desc_batch_size=4,
+            word_embed_url=_fasttext_zip_url(tmp_path),
+        )
+        linker.fit(
+            _KG1,
+            _KG2,
+            _GROUND_TRUTH,
+            graph=_GRAPH,
+            random_state=0,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+        )
+
+        entity_id = _KG1[0].id
+        assert not np.allclose(
+            linker.source_embedding(entity_id), linker.target_embedding(entity_id)
+        )
+
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
     def test_recovers_seeded_alignment_on_cuda(self, tmp_path: Path) -> None:
         linker = KDCoELinker(

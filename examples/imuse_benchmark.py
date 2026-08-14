@@ -13,7 +13,10 @@ alignment purely from attribute-value string similarity (see
 linkingtk.algorithms.ea.imuse's module docstring). Validation pairs still
 drive early stopping (OpenEA's own published config does this too, so
 this isn't a deviation); test pairs are held out and only used to score
-ranked predictions.
+ranked predictions. Ranking is exhaustive (every test-source entity
+against every test-target entity, via linkingtk.eval.rank_exhaustive, no
+blocking/candidate restriction), matching OpenEA's own evaluation
+methodology.
 
 Requires the `kge` optional dependency group (for `torch` and
 `rapidfuzz`) -- install with `uv sync --extra kge`. Fetches a multi-MB
@@ -44,9 +47,8 @@ Run with: `uv run python examples/imuse_benchmark.py`
 from __future__ import annotations
 
 from linkingtk.algorithms.ea import IMUSELinker
-from linkingtk.blocking import LabelOverlap
 from linkingtk.datasets import EnFr15KAttrDataset
-from linkingtk.eval import Evaluator
+from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 
@@ -72,9 +74,13 @@ def main() -> None:
         patience=5,
         eval_every=10,
     )
-    results = linker.link(entities1, entities2, blocking=LabelOverlap(max_matches=10))
-
-    ranked_predictions = [(r.source_id, [r.target_id, *r.alternatives]) for r in results]
+    test_source_ids = {s for s, _ in test_pairs}
+    test_target_ids = {t for _, t in test_pairs}
+    ranked_predictions = rank_exhaustive(
+        linker,
+        [e for e in entities1 if e.id in test_source_ids],
+        [e for e in entities2 if e.id in test_target_ids],
+    )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
     print(
         f"{len(train_pairs)} train (unused) / {len(val_pairs)} val / {len(test_pairs)} test pairs"
