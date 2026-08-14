@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from linkingtk.algorithms.ea import KDCoELinker
 from linkingtk.algorithms.ea._kdcoe_text import (
@@ -113,6 +114,33 @@ class TestFitAndLink:
             wv_dim=_WV_DIM,
             desc_batch_size=4,
             word_embed_url=_fasttext_zip_url(tmp_path),
+        )
+        linker.fit(
+            _KG1,
+            _KG2,
+            _GROUND_TRUTH,
+            graph=_GRAPH,
+            random_state=0,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+        )
+
+        results = linker.link(_KG1, _KG2, blocking=_AllPairs())
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
+        assert report.metrics["precision@1"] == 1.0
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+    def test_recovers_seeded_alignment_on_cuda(self, tmp_path: Path) -> None:
+        linker = KDCoELinker(
+            embedding_dim=16,
+            num_epochs=50,
+            batch_size=32,
+            wv_dim=_WV_DIM,
+            desc_batch_size=4,
+            word_embed_url=_fasttext_zip_url(tmp_path),
+            device="cuda",
         )
         linker.fit(
             _KG1,

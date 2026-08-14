@@ -125,6 +125,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_training import find_new_pairs
 from linkingtk.algorithms.ea._jape_training import reference_pools
 from linkingtk.algorithms.ea._kdcoe_text import (
@@ -218,6 +219,9 @@ class KDCoELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
+            as CPU numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -238,6 +242,7 @@ class KDCoELinker(BaseLinker):
         word_embed_url: str = _FASTTEXT_URL,
         cache_dir: Path | None = None,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -255,6 +260,7 @@ class KDCoELinker(BaseLinker):
         self.word_embed_url = word_embed_url
         self.cache_dir = cache_dir
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._mapping: npt.NDArray[np.floating[Any]] | None = None
         self._fitted = False
@@ -312,7 +318,8 @@ class KDCoELinker(BaseLinker):
         Raises:
             LinkingTKError: If none of ``ground_truth``'s pairs have both
                 ids present in ``graph``'s own triples -- nothing to seed
-                either phase's training with.
+                either phase's training with -- or if ``device`` is
+                invalid or unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         try:
@@ -321,8 +328,10 @@ class KDCoELinker(BaseLinker):
         except ImportError as exc:
             raise OptionalDependencyError("KDCoELinker", "kge") from exc
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
         rng = np.random.default_rng(random_state)
 
         ids1 = {entity.id for entity in dataset1}
@@ -348,18 +357,18 @@ class KDCoELinker(BaseLinker):
         seed_target_ids = np.array([entity_to_id[t] for _, t in seed_pairs], dtype=np.int64)
 
         word_embeds, word_ids = self._build_description_inputs(
-            dataset1, dataset2, attribute_triples1 or [], attribute_triples2 or []
+            dataset1, dataset2, attribute_triples1 or [], attribute_triples2 or [], device
         )
 
         entity_embeds, relation_embeds, mapping_mat, eye = self._init_structural(
-            torch, functional, len(entity_to_id), len(relation_to_id)
+            torch, functional, len(entity_to_id), len(relation_to_id), device
         )
         structural_optimizer = torch.optim.Adagrad(
             [entity_embeds, relation_embeds], lr=self.learning_rate
         )
         mapping_optimizer = torch.optim.Adagrad([mapping_mat], lr=self.learning_rate)
         mapping_optimizer_new = torch.optim.Adagrad([mapping_mat], lr=self.learning_rate)
-        desc_encoder = build_description_encoder(self.wv_dim, self.default_desc_length)
+        desc_encoder = build_description_encoder(self.wv_dim, self.default_desc_length).to(device)
         desc_optimizer = torch.optim.Adagrad(desc_encoder.parameters(), lr=self.learning_rate)
 
         val_pairs = [
@@ -428,8 +437,8 @@ class KDCoELinker(BaseLinker):
             rel_bootstrapped_pairs |= rel_found
 
         with torch.no_grad():
-            final_embeds = functional.normalize(entity_embeds, dim=1).numpy()
-            final_mapping = mapping_mat.numpy()
+            final_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
+            final_mapping = mapping_mat.cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -443,6 +452,7 @@ class KDCoELinker(BaseLinker):
         dataset2: list[Entity],
         attribute_triples1: list[Triple],
         attribute_triples2: list[Triple],
+        device: Any,
     ) -> tuple[Any, dict[str, npt.NDArray[np.int64]]]:
         """Fixed word-vector table plus every entity's fixed-length word-id sequence."""
         import torch
@@ -461,25 +471,31 @@ class KDCoELinker(BaseLinker):
         rows = [word_vectors[word] for word in vocabulary_words]
         rows.append(np.zeros(self.wv_dim, dtype=np.float32))
         word_embeds_np = np.stack(rows).astype(np.float32)
-        word_embeds = torch.from_numpy(word_embeds_np).float()
+        word_embeds = torch.from_numpy(word_embeds_np).float().to(device)
 
         word_ids = build_word_ids(tokens_by_entity, word_to_index, self.default_desc_length, oov_id)
         return word_embeds, word_ids
 
     def _init_structural(
-        self, torch: Any, functional: Any, num_entities: int, num_relations: int
+        self, torch: Any, functional: Any, num_entities: int, num_relations: int, device: Any
     ) -> tuple[Any, Any, Any, Any]:
         """Unit-normalized init, matching OpenEA's ``init="unit"`` (same as MTransE's)."""
         entity_embeds = torch.nn.Parameter(
-            functional.normalize(torch.randn(num_entities, self.embedding_dim), dim=1)
+            functional.normalize(
+                torch.randn(num_entities, self.embedding_dim, device=device), dim=1
+            )
         )
         relation_embeds = torch.nn.Parameter(
-            functional.normalize(torch.randn(num_relations, self.embedding_dim), dim=1)
+            functional.normalize(
+                torch.randn(num_relations, self.embedding_dim, device=device), dim=1
+            )
         )
         mapping_mat = torch.nn.Parameter(
-            torch.nn.init.orthogonal_(torch.empty(self.embedding_dim, self.embedding_dim))
+            torch.nn.init.orthogonal_(
+                torch.empty(self.embedding_dim, self.embedding_dim, device=device)
+            )
         )
-        eye = torch.eye(self.embedding_dim)
+        eye = torch.eye(self.embedding_dim, device=device)
         return entity_embeds, relation_embeds, mapping_mat, eye
 
     def _train_desc_phase(
@@ -580,8 +596,8 @@ class KDCoELinker(BaseLinker):
             )
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(entity_embeds, dim=1).numpy()
-                    current_mapping = mapping_mat.numpy()
+                    current_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
+                    current_mapping = mapping_mat.cpu().numpy()
                 hits1 = validation_hits1_structural(
                     current_embeds, current_mapping, entity_to_id, val_pairs
                 )
@@ -606,11 +622,14 @@ class KDCoELinker(BaseLinker):
         if not pool1 or not pool2:
             return set()
         with torch.no_grad():
+            device = word_embeds.device
             ids1 = np.stack([word_ids[e] for e in pool1])
             ids2 = np.stack([word_ids[e] for e in pool2])
-            embeds1 = desc_encoder(word_embeds[torch.from_numpy(ids1).long()]).numpy()
-            embeds2 = desc_encoder(word_embeds[torch.from_numpy(ids2).long()]).numpy()
-        sim_mat = embeds1 @ embeds2.T
+            embeds1 = desc_encoder(word_embeds[torch.from_numpy(ids1).long().to(device)])
+            embeds2 = desc_encoder(word_embeds[torch.from_numpy(ids2).long().to(device)])
+            embeds1_np = embeds1.cpu().numpy()
+            embeds2_np = embeds2.cpu().numpy()
+        sim_mat = embeds1_np @ embeds2_np.T
         found = find_new_pairs(sim_mat, self.desc_sim_th)
         return {(pool1[i], pool2[j]) for i, j, _ in found}
 
@@ -628,8 +647,8 @@ class KDCoELinker(BaseLinker):
         if not pool1 or not pool2:
             return set()
         with torch.no_grad():
-            current = functional.normalize(entity_embeds, dim=1).numpy()
-            current_mapping = mapping_mat.numpy()
+            current = functional.normalize(entity_embeds, dim=1).cpu().numpy()
+            current_mapping = mapping_mat.cpu().numpy()
         pool1_ids = np.array([entity_to_id[e] for e in pool1], dtype=np.int64)
         pool2_ids = np.array([entity_to_id[e] for e in pool2], dtype=np.int64)
         mapped1 = current[pool1_ids] @ current_mapping

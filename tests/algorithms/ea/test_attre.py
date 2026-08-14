@@ -78,6 +78,27 @@ class TestFitAndLink:
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
 
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+    def test_recovers_seeded_alignment_on_cuda(self) -> None:
+        linker = AttrELinker(
+            embedding_dim=16, num_epochs=100, batch_size=32, literal_len=5, device="cuda"
+        )
+        linker.fit(
+            _KG1,
+            _KG2,
+            _GROUND_TRUTH,
+            graph=_GRAPH,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+            random_state=0,
+        )
+
+        results = linker.link(_KG1, _KG2, blocking=_AllPairs())
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
+        assert report.metrics["precision@1"] == 1.0
+
     def test_partial_seed_generalizes_to_unseeded_pairs(self) -> None:
         # Seed only 2 of 4 pairs -- shared-id structural + attribute/character
         # training together should still recover the rest (mirrors

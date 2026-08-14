@@ -41,6 +41,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
@@ -77,6 +78,9 @@ class MTransELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
+            as CPU numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -87,6 +91,7 @@ class MTransELinker(BaseLinker):
         learning_rate: float = 0.01,
         alpha: float = 5.0,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -94,6 +99,7 @@ class MTransELinker(BaseLinker):
         self.learning_rate = learning_rate
         self.alpha = alpha
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._mapping: npt.NDArray[np.floating[Any]] | None = None
         self._fitted = False
@@ -145,7 +151,8 @@ class MTransELinker(BaseLinker):
         Raises:
             LinkingTKError: If none of ``ground_truth``'s pairs have both
                 ids present in ``graph``'s own triples -- nothing to train
-                the mapping with.
+                the mapping with -- or if ``device`` is invalid or
+                unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         try:
@@ -154,15 +161,17 @@ class MTransELinker(BaseLinker):
         except ImportError as exc:
             raise OptionalDependencyError("MTransELinker", "kge") from exc
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
 
         triples = to_triples(graph)
         entity_to_id, relation_to_id = build_id_mappings(triples)
         mapped_triples = map_triples_to_ids(triples, entity_to_id, relation_to_id)
-        heads = torch.from_numpy(mapped_triples[:, 0]).long()
-        rels = torch.from_numpy(mapped_triples[:, 1]).long()
-        tails = torch.from_numpy(mapped_triples[:, 2]).long()
+        heads = torch.from_numpy(mapped_triples[:, 0]).long().to(device)
+        rels = torch.from_numpy(mapped_triples[:, 1]).long().to(device)
+        tails = torch.from_numpy(mapped_triples[:, 2]).long().to(device)
 
         seed_pairs = [(s, t) for s, t in ground_truth if s in entity_to_id and t in entity_to_id]
         if not seed_pairs:
@@ -170,19 +179,25 @@ class MTransELinker(BaseLinker):
                 "None of `ground_truth`'s pairs have both ids present in `graph`'s "
                 "own triples; fit() has no seed pairs to train MTransE's mapping with."
             )
-        seed_source = torch.tensor([entity_to_id[s] for s, _ in seed_pairs])
-        seed_target = torch.tensor([entity_to_id[t] for _, t in seed_pairs])
+        seed_source = torch.tensor([entity_to_id[s] for s, _ in seed_pairs], device=device)
+        seed_target = torch.tensor([entity_to_id[t] for _, t in seed_pairs], device=device)
 
         entity_embeds = torch.nn.Parameter(
-            functional.normalize(torch.randn(len(entity_to_id), self.embedding_dim), dim=1)
+            functional.normalize(
+                torch.randn(len(entity_to_id), self.embedding_dim, device=device), dim=1
+            )
         )
         relation_embeds = torch.nn.Parameter(
-            functional.normalize(torch.randn(len(relation_to_id), self.embedding_dim), dim=1)
+            functional.normalize(
+                torch.randn(len(relation_to_id), self.embedding_dim, device=device), dim=1
+            )
         )
         mapping_mat = torch.nn.Parameter(
-            torch.nn.init.orthogonal_(torch.empty(self.embedding_dim, self.embedding_dim))
+            torch.nn.init.orthogonal_(
+                torch.empty(self.embedding_dim, self.embedding_dim, device=device)
+            )
         )
-        eye = torch.eye(self.embedding_dim)
+        eye = torch.eye(self.embedding_dim, device=device)
 
         triple_optimizer = torch.optim.Adagrad(
             [entity_embeds, relation_embeds], lr=self.learning_rate
@@ -199,7 +214,7 @@ class MTransELinker(BaseLinker):
         epochs_without_improvement = 0
 
         for epoch in range(self.num_epochs):
-            perm = torch.randperm(len(heads))
+            perm = torch.randperm(len(heads), device=device)
             for step in range(triple_steps):
                 idx = perm[step * self.batch_size : (step + 1) * self.batch_size]
                 h = functional.normalize(entity_embeds[heads[idx]], dim=1)
@@ -211,7 +226,7 @@ class MTransELinker(BaseLinker):
                 triple_optimizer.step()
 
             for _step in range(triple_steps):
-                batch_idx = torch.randint(0, len(seed_source), (seed_batch_size,))
+                batch_idx = torch.randint(0, len(seed_source), (seed_batch_size,), device=device)
                 s_vecs = functional.normalize(entity_embeds[seed_source[batch_idx]], dim=1)
                 t_vecs = functional.normalize(entity_embeds[seed_target[batch_idx]], dim=1)
                 map_loss = ((t_vecs - s_vecs @ mapping_mat) ** 2).sum()
@@ -223,8 +238,8 @@ class MTransELinker(BaseLinker):
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(entity_embeds, dim=1).numpy()
-                    current_mapping = mapping_mat.numpy()
+                    current_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
+                    current_mapping = mapping_mat.cpu().numpy()
                 hits1 = _validation_hits1(current_embeds, current_mapping, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -235,8 +250,8 @@ class MTransELinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = functional.normalize(entity_embeds, dim=1).numpy()
-            final_mapping = mapping_mat.numpy()
+            final_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
+            final_mapping = mapping_mat.cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }

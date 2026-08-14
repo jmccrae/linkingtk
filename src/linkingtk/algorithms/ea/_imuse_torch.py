@@ -62,8 +62,9 @@ def train_align_epoch(
 
     if len(source_ids) == 0:
         return
-    source_t = torch.from_numpy(source_ids).long()
-    target_t = torch.from_numpy(target_ids).long()
+    device = entity_embeds.device
+    source_t = torch.from_numpy(source_ids).long().to(device)
+    target_t = torch.from_numpy(target_ids).long().to(device)
     for _ in range(steps):
         s = functional.normalize(entity_embeds[source_t], dim=1)
         t = functional.normalize(entity_embeds[target_t], dim=1)

@@ -125,6 +125,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._imuse_text import bootstrap_alignment
 from linkingtk.algorithms.ea._imuse_torch import train_align_epoch
 from linkingtk.algorithms.ea._iptranse_torch import validation_hits1
@@ -187,6 +188,9 @@ class IMUSELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
+            as CPU numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -202,6 +206,7 @@ class IMUSELinker(BaseLinker):
         top_k_attribute_pairs: int = 10,
         bootstrap_iterations: int = 1,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -214,6 +219,7 @@ class IMUSELinker(BaseLinker):
         self.top_k_attribute_pairs = top_k_attribute_pairs
         self.bootstrap_iterations = bootstrap_iterations
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._fitted = False
 
@@ -271,7 +277,8 @@ class IMUSELinker(BaseLinker):
                 ``attribute_triples2`` are empty (nothing to bootstrap an
                 alignment with), or if bootstrapping finds no confident
                 aligned entity pairs at all (nothing to train the
-                alignment loss with).
+                alignment loss with), or if ``device`` is invalid or
+                unavailable.
             OptionalDependencyError: If torch or rapidfuzz isn't installed.
         """
         try:
@@ -288,8 +295,10 @@ class IMUSELinker(BaseLinker):
                 "alignment with (it has no ground_truth to fall back on)."
             )
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
         rng = np.random.default_rng(random_state)
 
         ids1 = {entity.id for entity in dataset1}
@@ -327,7 +336,7 @@ class IMUSELinker(BaseLinker):
         seed_target_ids = np.array([entity_to_id[t] for _, t in seed_pairs], dtype=np.int64)
 
         entity_embeds, relation_embeds = self._init_embeddings(
-            torch, functional, len(entity_to_id), len(relation_to_id)
+            torch, functional, len(entity_to_id), len(relation_to_id), device
         )
         triple_optimizer = torch.optim.SGD([entity_embeds, relation_embeds], lr=self.learning_rate)
         align_optimizer = torch.optim.SGD([entity_embeds], lr=self.learning_rate)
@@ -356,7 +365,7 @@ class IMUSELinker(BaseLinker):
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+                    current_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
                 hits1 = validation_hits1(current_embeds, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -367,7 +376,7 @@ class IMUSELinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+            final_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -375,7 +384,7 @@ class IMUSELinker(BaseLinker):
         return self
 
     def _init_embeddings(
-        self, torch: Any, functional: Any, num_entities: int, num_relations: int
+        self, torch: Any, functional: Any, num_entities: int, num_relations: int, device: Any
     ) -> tuple[Any, Any]:
         """Truncated-normal init, matching OpenEA's ``init="normal"`` (AttrE's/IPTransE's, too)."""
         std = 1.0 / math.sqrt(self.embedding_dim)
@@ -384,7 +393,10 @@ class IMUSELinker(BaseLinker):
             return torch.nn.Parameter(
                 functional.normalize(
                     torch.nn.init.trunc_normal_(
-                        torch.empty(size, self.embedding_dim), std=std, a=-2 * std, b=2 * std
+                        torch.empty(size, self.embedding_dim, device=device),
+                        std=std,
+                        a=-2 * std,
+                        b=2 * std,
                     ),
                     dim=1,
                 )

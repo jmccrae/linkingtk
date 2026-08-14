@@ -68,6 +68,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_torch import (
     bootstrap_round,
     build_kg_context,
@@ -123,6 +124,9 @@ class IPTransELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
+            as CPU numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -137,6 +141,7 @@ class IPTransELinker(BaseLinker):
         bootstrap_every: int = 100,
         bootstrap_pool_size: int | None = None,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -148,6 +153,7 @@ class IPTransELinker(BaseLinker):
         self.bootstrap_every = bootstrap_every
         self.bootstrap_pool_size = bootstrap_pool_size
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._fitted = False
 
@@ -196,7 +202,8 @@ class IPTransELinker(BaseLinker):
         Raises:
             LinkingTKError: If none of ``ground_truth``'s pairs have both
                 ids present in ``dataset1``/``dataset2`` -- nothing to
-                seed the shared embedding table with.
+                seed the shared embedding table with -- or if ``device``
+                is invalid or unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         try:
@@ -205,8 +212,10 @@ class IPTransELinker(BaseLinker):
         except ImportError as exc:
             raise OptionalDependencyError("IPTransELinker", "kge") from exc
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
         rng = np.random.default_rng(random_state)
 
         ids1 = {entity.id for entity in dataset1}
@@ -237,7 +246,7 @@ class IPTransELinker(BaseLinker):
         combined_entity_pool = np.union1d(ctx1.entity_pool, ctx2.entity_pool)
 
         entity_embeds, relation_embeds = self._init_embeddings(
-            torch, functional, len(entity_to_id), len(relation_to_id)
+            torch, functional, len(entity_to_id), len(relation_to_id), device
         )
         optimizer = torch.optim.Adagrad([entity_embeds, relation_embeds], lr=self.learning_rate)
         alignment_optimizer = torch.optim.Adagrad(
@@ -281,7 +290,7 @@ class IPTransELinker(BaseLinker):
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+                    current_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
                 hits1 = validation_hits1(current_embeds, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -292,7 +301,7 @@ class IPTransELinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+            final_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -334,6 +343,7 @@ class IPTransELinker(BaseLinker):
         functional: Any,
         num_entities: int,
         num_relations: int,
+        device: Any,
     ) -> tuple[Any, Any]:
         """Truncated-normal init.
 
@@ -347,7 +357,10 @@ class IPTransELinker(BaseLinker):
             return torch.nn.Parameter(
                 functional.normalize(
                     torch.nn.init.trunc_normal_(
-                        torch.empty(size, self.embedding_dim), std=std, a=-2 * std, b=2 * std
+                        torch.empty(size, self.embedding_dim, device=device),
+                        std=std,
+                        a=-2 * std,
+                        b=2 * std,
                     ),
                     dim=1,
                 )

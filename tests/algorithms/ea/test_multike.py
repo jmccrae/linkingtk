@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import torch
 
 from linkingtk.algorithms.ea import MultiKELinker
 from linkingtk.algorithms.ea._multike_literal import encode_literals
@@ -90,6 +91,34 @@ class TestFitAndLink:
             attribute_batch_size=32,
             min_predicate_triple_count=1,
             literal_encoder_model=_TINY_MODEL,
+        )
+        linker.fit(
+            _KG1,
+            _KG2,
+            _GROUND_TRUTH,
+            graph=_GRAPH,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+            random_state=0,
+        )
+
+        results = linker.link(_KG1, _KG2, blocking=_AllPairs())
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
+        assert report.metrics["precision@1"] == 1.0
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+    def test_recovers_seeded_alignment_on_cuda(self) -> None:
+        linker = MultiKELinker(
+            embedding_dim=16,
+            num_epochs=300,
+            batch_size=32,
+            entity_batch_size=32,
+            attribute_batch_size=32,
+            min_predicate_triple_count=1,
+            literal_encoder_model=_TINY_MODEL,
+            device="cuda",
         )
         linker.fit(
             _KG1,
@@ -357,3 +386,17 @@ class TestEncodeLiterals:
         vectors = encode_literals([], _TINY_MODEL, embedding_dim=16)
 
         assert vectors.shape == (0, 16)
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+    def test_output_shape_and_normalization_on_cuda(self) -> None:
+        vectors = encode_literals(
+            ["Paris", "Berlin", "United States"],
+            _TINY_MODEL,
+            embedding_dim=16,
+            random_state=0,
+            device="cuda",
+        )
+
+        assert vectors.shape == (3, 16)
+        norms = np.linalg.norm(vectors, axis=1)
+        assert np.allclose(norms, 1.0, atol=1e-5)

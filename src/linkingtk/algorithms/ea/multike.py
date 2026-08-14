@@ -145,6 +145,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_torch import validation_hits1
 from linkingtk.algorithms.ea._kdcoe_torch import build_kg_context
 from linkingtk.algorithms.ea._multike_literal import encode_literals
@@ -233,6 +234,10 @@ class MultiKELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Also used for the literal encoder's
+            forward pass. Trained embeddings are always stored as CPU
+            numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -253,6 +258,7 @@ class MultiKELinker(BaseLinker):
         literal_encoder_model: str = "distilbert-base-multilingual-cased",
         literal_max_length: int = 16,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -270,6 +276,7 @@ class MultiKELinker(BaseLinker):
         self.literal_encoder_model = literal_encoder_model
         self.literal_max_length = literal_max_length
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._fitted = False
 
@@ -322,7 +329,8 @@ class MultiKELinker(BaseLinker):
             LinkingTKError: If ``attribute_triples1`` and
                 ``attribute_triples2`` are both empty, or if none of
                 ``ground_truth``'s pairs have both ids present in
-                ``graph``'s own triples.
+                ``graph``'s own triples, or if ``device`` is invalid or
+                unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         if not attribute_triples1 and not attribute_triples2:
@@ -338,8 +346,10 @@ class MultiKELinker(BaseLinker):
         except ImportError as exc:
             raise OptionalDependencyError("MultiKELinker", "kge") from exc
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
         rng = np.random.default_rng(random_state)
 
         ids1 = {entity.id for entity in dataset1}
@@ -452,17 +462,17 @@ class MultiKELinker(BaseLinker):
         pred_attr_w = np.concatenate([pred_attr1_w, pred_attr2_w], axis=0)
 
         name_embeds, literal_embeds = self._encode_literals(
-            dataset1, dataset2, entity_to_id, values, random_state
+            dataset1, dataset2, entity_to_id, values, random_state, device
         )
-        name_embeds_t = torch.from_numpy(name_embeds)
-        literal_embeds_t = torch.from_numpy(literal_embeds)
+        name_embeds_t = torch.from_numpy(name_embeds).to(device)
+        literal_embeds_t = torch.from_numpy(literal_embeds).to(device)
 
-        rv_ent_embeds = self._init_embedding(torch, functional, len(entity_to_id))
-        rel_embeds = self._init_embedding(torch, functional, max(1, len(relation_to_id)))
-        av_ent_embeds = self._init_embedding(torch, functional, len(entity_to_id))
-        attr_embeds = self._init_embedding_raw(torch, max(1, len(attribute_to_id)))
-        ent_embeds = self._init_embedding(torch, functional, len(entity_to_id))
-        scorer = build_attribute_scorer(self.embedding_dim)
+        rv_ent_embeds = self._init_embedding(torch, functional, len(entity_to_id), device)
+        rel_embeds = self._init_embedding(torch, functional, max(1, len(relation_to_id)), device)
+        av_ent_embeds = self._init_embedding(torch, functional, len(entity_to_id), device)
+        attr_embeds = self._init_embedding_raw(torch, max(1, len(attribute_to_id)), device)
+        ent_embeds = self._init_embedding(torch, functional, len(entity_to_id), device)
+        scorer = build_attribute_scorer(self.embedding_dim).to(device)
 
         relation_optimizer = torch.optim.SGD(
             [rv_ent_embeds, rel_embeds, ent_embeds], lr=self.learning_rate
@@ -585,7 +595,7 @@ class MultiKELinker(BaseLinker):
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(ent_embeds, dim=1).numpy()
+                    current_embeds = functional.normalize(ent_embeds, dim=1).cpu().numpy()
                 hits1 = validation_hits1(current_embeds, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -596,7 +606,7 @@ class MultiKELinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = functional.normalize(ent_embeds, dim=1).numpy()
+            final_embeds = functional.normalize(ent_embeds, dim=1).cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -649,6 +659,7 @@ class MultiKELinker(BaseLinker):
         entity_to_id: dict[str, int],
         values: list[str],
         random_state: int | None,
+        device: Any,
     ) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
         """Build ``(name_embeds, literal_embeds)`` from one combined encoder call.
 
@@ -672,6 +683,7 @@ class MultiKELinker(BaseLinker):
             self.embedding_dim,
             self.literal_max_length,
             random_state=random_state,
+            device=device,
         )
         literal_index = {text: index for index, text in enumerate(literal_texts)}
 
@@ -686,24 +698,27 @@ class MultiKELinker(BaseLinker):
 
         return name_mat, literal_mat.astype(np.float32)
 
-    def _init_embedding(self, torch: Any, functional: Any, size: int) -> Any:
+    def _init_embedding(self, torch: Any, functional: Any, size: int, device: Any) -> Any:
         """Truncated-normal + L2-norm init, matching this family's `_init_embeddings` convention."""
         std = 1.0 / math.sqrt(self.embedding_dim)
         return torch.nn.Parameter(
             functional.normalize(
                 torch.nn.init.trunc_normal_(
-                    torch.empty(size, self.embedding_dim), std=std, a=-2 * std, b=2 * std
+                    torch.empty(size, self.embedding_dim, device=device),
+                    std=std,
+                    a=-2 * std,
+                    b=2 * std,
                 ),
                 dim=1,
             )
         )
 
-    def _init_embedding_raw(self, torch: Any, size: int) -> Any:
+    def _init_embedding_raw(self, torch: Any, size: int, device: Any) -> Any:
         """Truncated-normal init, no L2-norm -- for ``attr_embeds`` only, see module docstring."""
         std = 1.0 / math.sqrt(self.embedding_dim)
         return torch.nn.Parameter(
             torch.nn.init.trunc_normal_(
-                torch.empty(size, self.embedding_dim), std=std, a=-2 * std, b=2 * std
+                torch.empty(size, self.embedding_dim, device=device), std=std, a=-2 * std, b=2 * std
             )
         )
 

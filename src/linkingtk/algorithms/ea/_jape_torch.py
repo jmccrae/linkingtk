@@ -50,6 +50,7 @@ def train_attr2vec(
     batch_size: int,
     learning_rate: float,
     rng: np.random.Generator,
+    device: torch.device,
 ) -> npt.NDArray[np.floating[Any]]:
     """Train Attr2Vec's skip-gram-style attribute-correlation embedding.
 
@@ -87,6 +88,10 @@ def train_attr2vec(
             this doesn't crash on tiny inputs).
         learning_rate: Adagrad's learning rate.
         rng: Random generator, for reproducibility.
+        device: Torch device to train on -- this builds its own embedding
+            table from scratch rather than receiving one, so it takes
+            ``device`` explicitly rather than deriving it from an
+            argument.
 
     Returns:
         ``(num_attributes, embedding_dim)`` trained, L2-normalized
@@ -100,17 +105,18 @@ def train_attr2vec(
     def init_xavier(rows: int) -> torch.nn.Parameter:
         return torch.nn.Parameter(
             functional.normalize(
-                torch.nn.init.xavier_normal_(torch.empty(rows, embedding_dim)), dim=1
+                torch.nn.init.xavier_normal_(torch.empty(rows, embedding_dim, device=device)),
+                dim=1,
             )
         )
 
     attr_embeds = init_xavier(num_attributes)
     nce_weights = init_xavier(num_attributes)
-    nce_biases = torch.nn.Parameter(torch.zeros(num_attributes))
+    nce_biases = torch.nn.Parameter(torch.zeros(num_attributes, device=device))
     optimizer = torch.optim.Adagrad([attr_embeds, nce_weights, nce_biases], lr=learning_rate)
 
-    inputs = torch.from_numpy(training_pairs_ids[:, 0]).long()
-    labels = torch.from_numpy(training_pairs_ids[:, 1]).long()
+    inputs = torch.from_numpy(training_pairs_ids[:, 0]).long().to(device)
+    labels = torch.from_numpy(training_pairs_ids[:, 1]).long().to(device)
     batch_size = min(batch_size, len(inputs))
     steps = max(1, len(inputs) // batch_size)
 
@@ -128,7 +134,11 @@ def train_attr2vec(
             ]
             pos_loss = -functional.logsigmoid(pos_score)
 
-            neg_ids = torch.from_numpy(rng.integers(0, num_attributes, size=num_sampled)).long()
+            neg_ids = (
+                torch.from_numpy(rng.integers(0, num_attributes, size=num_sampled))
+                .long()
+                .to(device)
+            )
             neg_score = pos_input @ normalized_weights[neg_ids].T + nce_biases[neg_ids]
             neg_loss = -functional.logsigmoid(-neg_score).sum(dim=1)
 
@@ -138,7 +148,9 @@ def train_attr2vec(
             optimizer.step()
 
     with torch.no_grad():
-        final: npt.NDArray[np.floating[Any]] = functional.normalize(attr_embeds, dim=1).numpy()
+        final: npt.NDArray[np.floating[Any]] = (
+            functional.normalize(attr_embeds, dim=1).cpu().numpy()
+        )
     return final
 
 
@@ -162,6 +174,7 @@ def train_triple_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = entity_embeds.device
     total = len(ctx1.triples) + len(ctx2.triples)
     steps = max(1, math.ceil(total / batch_size))
     batch1 = round(len(ctx1.triples) / total * batch_size) if total else 0
@@ -179,8 +192,8 @@ def train_triple_epoch(
         neg2 = sample_negative_triples(ctx2.triples[idx2], ctx2.entity_pool, ctx2.real_triples, rng)
         neg = np.concatenate([neg1, neg2], axis=0)
 
-        pos_t = torch.from_numpy(pos).long()
-        neg_t = torch.from_numpy(neg).long()
+        pos_t = torch.from_numpy(pos).long().to(device)
+        neg_t = torch.from_numpy(neg).long().to(device)
         h = functional.normalize(entity_embeds[pos_t[:, 0]], dim=1)
         r = functional.normalize(relation_embeds[pos_t[:, 1]], dim=1)
         t = functional.normalize(entity_embeds[pos_t[:, 2]], dim=1)
@@ -225,11 +238,12 @@ def train_sim_epoch(
     if steps == 0:
         return
 
-    pool2_t = torch.from_numpy(pool2_ids).long()
+    device = entity_embeds.device
+    pool2_t = torch.from_numpy(pool2_ids).long().to(device)
     for _ in range(steps):
         idx = rng.choice(len(pool1_ids), size=sub_mat_size, replace=False)
-        batch_entities = torch.from_numpy(pool1_ids[idx]).long()
-        sim_rows = torch.from_numpy(attr_sim_mat[idx, :]).float()
+        batch_entities = torch.from_numpy(pool1_ids[idx]).long().to(device)
+        sim_rows = torch.from_numpy(attr_sim_mat[idx, :]).float().to(device)
 
         ref1 = functional.normalize(entity_embeds[batch_entities], dim=1)
         ref2 = functional.normalize(entity_embeds[pool2_t], dim=1)

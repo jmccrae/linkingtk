@@ -110,7 +110,7 @@ def desc_contrastive_loss(embeds1: torch.Tensor, embeds2: torch.Tensor) -> torch
     import torch.nn.functional as functional
 
     batch_size = embeds1.shape[0]
-    indicator = torch.full((batch_size, batch_size), -1.0 / batch_size)
+    indicator = torch.full((batch_size, batch_size), -1.0 / batch_size, device=embeds1.device)
     indicator.fill_diagonal_(1.0)
     sim = embeds1 @ embeds2.T
     loss: torch.Tensor = -torch.sum(functional.logsigmoid(sim * indicator)) / batch_size
@@ -140,6 +140,7 @@ def train_desc_epoch(
 
     if not pairs:
         return
+    device = word_embeds.device
     size = min(batch_size, len(pairs))
     num_batches = len(pairs) // size
     for _ in range(num_batches):
@@ -147,8 +148,8 @@ def train_desc_epoch(
         batch_pairs = [pairs[i] for i in chosen]
         ids1 = np.stack([word_ids[s] for s, _ in batch_pairs])
         ids2 = np.stack([word_ids[t] for _, t in batch_pairs])
-        embeds1 = word_embeds[torch.from_numpy(ids1).long()]
-        embeds2 = word_embeds[torch.from_numpy(ids2).long()]
+        embeds1 = word_embeds[torch.from_numpy(ids1).long().to(device)]
+        embeds2 = word_embeds[torch.from_numpy(ids2).long().to(device)]
         out1 = encoder(embeds1)
         out2 = encoder(embeds2)
         loss = desc_contrastive_loss(out1, out2)
@@ -169,10 +170,11 @@ def validation_hits1_desc(
     if not val_pairs:
         return 0.0
     with torch.no_grad():
+        device = word_embeds.device
         ids1 = np.stack([word_ids[s] for s, _ in val_pairs])
         ids2 = np.stack([word_ids[t] for _, t in val_pairs])
-        embeds1 = encoder(word_embeds[torch.from_numpy(ids1).long()]).numpy()
-        embeds2 = encoder(word_embeds[torch.from_numpy(ids2).long()]).numpy()
+        embeds1 = encoder(word_embeds[torch.from_numpy(ids1).long().to(device)]).cpu().numpy()
+        embeds2 = encoder(word_embeds[torch.from_numpy(ids2).long().to(device)]).cpu().numpy()
     similarities = cosine_similarity(embeds1, embeds2)
     predicted = np.argmax(similarities, axis=1)
     correct = sum(1 for i, j in enumerate(predicted) if j == i)
@@ -197,8 +199,9 @@ def _margin_loss(
     import torch
     import torch.nn.functional as functional
 
-    pos_t = torch.from_numpy(pos).long()
-    neg_t = torch.from_numpy(neg).long()
+    device = entity_embeds.device
+    pos_t = torch.from_numpy(pos).long().to(device)
+    neg_t = torch.from_numpy(neg).long().to(device)
     h = functional.normalize(entity_embeds[pos_t[:, 0]], dim=1)
     r = functional.normalize(relation_embeds[pos_t[:, 1]], dim=1)
     t = functional.normalize(entity_embeds[pos_t[:, 2]], dim=1)
@@ -285,11 +288,12 @@ def train_mapping_epoch(
 
     if len(source_ids) == 0:
         return
+    device = entity_embeds.device
     batch_size = max(1, len(source_ids) // steps) if steps else len(source_ids)
-    source_t = torch.from_numpy(source_ids).long()
-    target_t = torch.from_numpy(target_ids).long()
+    source_t = torch.from_numpy(source_ids).long().to(device)
+    target_t = torch.from_numpy(target_ids).long().to(device)
     for _ in range(steps):
-        idx = torch.from_numpy(rng.integers(0, len(source_ids), size=batch_size)).long()
+        idx = torch.from_numpy(rng.integers(0, len(source_ids), size=batch_size)).long().to(device)
         s = functional.normalize(entity_embeds[source_t[idx]], dim=1)
         t = functional.normalize(entity_embeds[target_t[idx]], dim=1)
         mapped = s @ mapping_mat

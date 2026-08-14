@@ -1,4 +1,5 @@
 import pytest
+import torch
 
 from linkingtk.algorithms.ea import IMUSELinker
 from linkingtk.algorithms.ea._imuse_text import (
@@ -63,6 +64,26 @@ class _AllPairs(BlockingStrategy):
 class TestFitAndLink:
     def test_bootstrap_recovers_alignment_without_ground_truth(self) -> None:
         linker = IMUSELinker(embedding_dim=16, num_epochs=200, batch_size=32, learning_rate=0.5)
+        linker.fit(
+            _KG1,
+            _KG2,
+            graph=_GRAPH,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+            random_state=0,
+        )
+
+        results = linker.link(_KG1, _KG2, blocking=_AllPairs())
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
+        assert report.metrics["precision@1"] == 1.0
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+    def test_bootstrap_recovers_alignment_without_ground_truth_on_cuda(self) -> None:
+        linker = IMUSELinker(
+            embedding_dim=16, num_epochs=200, batch_size=32, learning_rate=0.5, device="cuda"
+        )
         linker.fit(
             _KG1,
             _KG2,

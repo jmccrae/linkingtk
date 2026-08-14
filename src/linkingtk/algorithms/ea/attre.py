@@ -100,6 +100,7 @@ from linkingtk.algorithms.ea._attre_text import (
     select_char_vocabulary,
 )
 from linkingtk.algorithms.ea._attre_torch import train_attr_epoch, train_joint_epoch
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_torch import validation_hits1
 from linkingtk.algorithms.ea._iptranse_training import build_shared_id_mappings
 from linkingtk.algorithms.ea._kdcoe_torch import build_kg_context, train_structural_epoch
@@ -150,6 +151,9 @@ class AttrELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
+            as CPU numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -162,6 +166,7 @@ class AttrELinker(BaseLinker):
         literal_len: int = 5,
         char_freq_threshold: float = 0.0001,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -171,6 +176,7 @@ class AttrELinker(BaseLinker):
         self.literal_len = literal_len
         self.char_freq_threshold = char_freq_threshold
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._fitted = False
 
@@ -225,7 +231,8 @@ class AttrELinker(BaseLinker):
             LinkingTKError: If ``attribute_triples1`` and
                 ``attribute_triples2`` are both empty, or if none of
                 ``ground_truth``'s pairs have both ids present in
-                ``dataset1``/``dataset2``.
+                ``dataset1``/``dataset2``, or if ``device`` is invalid or
+                unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         if not attribute_triples1 and not attribute_triples2:
@@ -241,8 +248,10 @@ class AttrELinker(BaseLinker):
         except ImportError as exc:
             raise OptionalDependencyError("AttrELinker", "kge") from exc
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
         rng = np.random.default_rng(random_state)
 
         ids1 = {entity.id for entity in dataset1}
@@ -274,14 +283,14 @@ class AttrELinker(BaseLinker):
             char_to_id,
             value_char_ids_tensor,
         ) = self._build_attribute_context(
-            torch, entity_to_id, attribute_triples1, attribute_triples2
+            torch, entity_to_id, attribute_triples1, attribute_triples2, device
         )
 
-        entity_embeds = self._init_embedding(torch, functional, len(entity_to_id))
-        relation_embeds = self._init_embedding(torch, functional, len(relation_to_id))
-        entity_embeds_ce = self._init_embedding(torch, functional, len(entity_to_id))
-        attr_embeds = self._init_embedding(torch, functional, max(1, len(attribute_to_id)))
-        char_embeds = self._init_embedding(torch, functional, len(char_to_id) + 1)
+        entity_embeds = self._init_embedding(torch, functional, len(entity_to_id), device)
+        relation_embeds = self._init_embedding(torch, functional, len(relation_to_id), device)
+        entity_embeds_ce = self._init_embedding(torch, functional, len(entity_to_id), device)
+        attr_embeds = self._init_embedding(torch, functional, max(1, len(attribute_to_id)), device)
+        char_embeds = self._init_embedding(torch, functional, len(char_to_id) + 1, device)
 
         se_optimizer = torch.optim.SGD([entity_embeds, relation_embeds], lr=self.learning_rate)
         ce_optimizer = torch.optim.SGD(
@@ -327,7 +336,7 @@ class AttrELinker(BaseLinker):
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+                    current_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
                 hits1 = validation_hits1(current_embeds, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -338,7 +347,7 @@ class AttrELinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+            final_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -351,6 +360,7 @@ class AttrELinker(BaseLinker):
         entity_to_id: dict[str, int],
         attribute_triples1: list[Triple],
         attribute_triples2: list[Triple],
+        device: Any,
     ) -> tuple[Any, Any, dict[str, int], dict[str, int], Any]:
         """Clean values, build the character/attribute/value id spaces, map triples to ids."""
 
@@ -379,7 +389,7 @@ class AttrELinker(BaseLinker):
             )
         else:
             value_char_ids_array = np.empty((0, self.literal_len), dtype=np.int64)
-        value_char_ids_tensor = torch.from_numpy(value_char_ids_array).long()
+        value_char_ids_tensor = torch.from_numpy(value_char_ids_array).long().to(device)
 
         def map_triples(triples: list[Triple]) -> npt.NDArray[np.int64]:
             rows = [(entity_to_id[e], attribute_to_id[a], value_to_id[v]) for e, a, v in triples]
@@ -399,13 +409,16 @@ class AttrELinker(BaseLinker):
         ce_ctx2 = attribute_kg_context(map_triples(cleaned2))
         return ce_ctx1, ce_ctx2, attribute_to_id, char_to_id, value_char_ids_tensor
 
-    def _init_embedding(self, torch: Any, functional: Any, size: int) -> Any:
+    def _init_embedding(self, torch: Any, functional: Any, size: int, device: Any) -> Any:
         """Truncated-normal init, matching OpenEA's ``init="normal"`` (same as IPTransE's)."""
         std = 1.0 / math.sqrt(self.embedding_dim)
         return torch.nn.Parameter(
             functional.normalize(
                 torch.nn.init.trunc_normal_(
-                    torch.empty(size, self.embedding_dim), std=std, a=-2 * std, b=2 * std
+                    torch.empty(size, self.embedding_dim, device=device),
+                    std=std,
+                    a=-2 * std,
+                    b=2 * std,
                 ),
                 dim=1,
             )

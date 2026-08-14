@@ -175,6 +175,7 @@ def train_relation_view_epoch(
 
     from linkingtk.algorithms.ea._iptranse_training import sample_negative_triples
 
+    device = rv_ent_embeds.device
     total = len(ctx1.triples) + len(ctx2.triples)
     if total == 0:
         return
@@ -204,8 +205,8 @@ def train_relation_view_epoch(
         neg = np.concatenate([neg1, neg2], axis=0)
         pos = np.concatenate([ctx1.triples[idx1], ctx2.triples[idx2]], axis=0)
 
-        pos_t = torch.from_numpy(pos).long()
-        neg_t = torch.from_numpy(neg).long()
+        pos_t = torch.from_numpy(pos).long().to(device)
+        neg_t = torch.from_numpy(neg).long().to(device)
 
         h = functional.normalize(rv_ent_embeds[pos_t[:, 0]], dim=1)
         r = functional.normalize(rel_embeds[pos_t[:, 1]], dim=1)
@@ -263,6 +264,7 @@ def train_attribute_view_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = av_ent_embeds.device
     total = len(ctx1.triples) + len(ctx2.triples)
     if total == 0:
         return
@@ -279,8 +281,8 @@ def train_attribute_view_epoch(
             continue
         pos = np.concatenate([ctx1.triples[idx1], ctx2.triples[idx2]], axis=0)
         weights = np.concatenate([ctx1.weights[idx1], ctx2.weights[idx2]], axis=0)
-        pos_t = torch.from_numpy(pos).long()
-        w_t = torch.from_numpy(weights).float()
+        pos_t = torch.from_numpy(pos).long().to(device)
+        w_t = torch.from_numpy(weights).float().to(device)
 
         attr = attr_embeds[pos_t[:, 1]]
         value = literal_embeds[pos_t[:, 2]]
@@ -321,8 +323,9 @@ def train_common_space_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = ent_embeds.device
     for batch_idx in _epoch_batches(len(entity_ids), batch_size, rng):
-        idx = torch.from_numpy(entity_ids[batch_idx]).long()
+        idx = torch.from_numpy(entity_ids[batch_idx]).long().to(device)
         final = functional.normalize(ent_embeds[idx], dim=1)
         rv = functional.normalize(rv_ent_embeds[idx], dim=1)
         av = functional.normalize(av_ent_embeds[idx], dim=1)
@@ -354,8 +357,9 @@ def train_cross_kg_relation_entity_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = rv_ent_embeds.device
     for batch_idx in _epoch_batches(len(triples), batch_size, rng):
-        batch = torch.from_numpy(triples[batch_idx]).long()
+        batch = torch.from_numpy(triples[batch_idx]).long().to(device)
         h = functional.normalize(rv_ent_embeds[batch[:, 0]], dim=1)
         r = functional.normalize(rel_embeds[batch[:, 1]], dim=1)
         t = functional.normalize(rv_ent_embeds[batch[:, 2]], dim=1)
@@ -387,8 +391,9 @@ def train_cross_kg_attribute_entity_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = av_ent_embeds.device
     for batch_idx in _epoch_batches(len(triples), batch_size, rng):
-        batch = torch.from_numpy(triples[batch_idx]).long()
+        batch = torch.from_numpy(triples[batch_idx]).long().to(device)
         head = functional.normalize(av_ent_embeds[batch[:, 0]], dim=1)
         attr = attr_embeds[batch[:, 1]]
         value = literal_embeds[batch[:, 2]]
@@ -421,9 +426,10 @@ def train_cross_kg_relation_predicate_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = rv_ent_embeds.device
     for batch_idx in _epoch_batches(len(triples), batch_size, rng):
-        batch = torch.from_numpy(triples[batch_idx]).long()
-        w = torch.from_numpy(weights[batch_idx]).float()
+        batch = torch.from_numpy(triples[batch_idx]).long().to(device)
+        w = torch.from_numpy(weights[batch_idx]).float().to(device)
         h = functional.normalize(rv_ent_embeds[batch[:, 0]], dim=1)
         r = functional.normalize(rel_embeds[batch[:, 1]], dim=1)
         t = functional.normalize(rv_ent_embeds[batch[:, 2]], dim=1)
@@ -462,9 +468,10 @@ def train_cross_kg_attribute_predicate_epoch(
     import torch
     import torch.nn.functional as functional
 
+    device = av_ent_embeds.device
     for batch_idx in _epoch_batches(len(triples), batch_size, rng):
-        batch = torch.from_numpy(triples[batch_idx]).long()
-        w = torch.from_numpy(weights[batch_idx]).float()
+        batch = torch.from_numpy(triples[batch_idx]).long().to(device)
+        w = torch.from_numpy(weights[batch_idx]).float().to(device)
         head = functional.normalize(av_ent_embeds[batch[:, 0]], dim=1)
         attr = attr_embeds[batch[:, 1]]
         value = literal_embeds[batch[:, 2]]

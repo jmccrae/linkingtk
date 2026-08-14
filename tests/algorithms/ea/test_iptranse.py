@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import torch
 
 from linkingtk.algorithms.ea import IPTransELinker
 from linkingtk.algorithms.ea._iptranse_training import (
@@ -52,6 +53,19 @@ class TestFitAndLink:
         # for that).
         linker = IPTransELinker(
             embedding_dim=16, num_epochs=100, batch_size=32, bootstrap_every=1000
+        )
+        linker.fit(_KG1, _KG2, _GROUND_TRUTH, graph=_GRAPH, random_state=0)
+
+        results = linker.link(_KG1, _KG2, blocking=_AllPairs())
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
+        assert report.metrics["precision@1"] == 1.0
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+    def test_recovers_seeded_alignment_on_cuda(self) -> None:
+        linker = IPTransELinker(
+            embedding_dim=16, num_epochs=100, batch_size=32, bootstrap_every=1000, device="cuda"
         )
         linker.fit(_KG1, _KG2, _GROUND_TRUTH, graph=_GRAPH, random_state=0)
 

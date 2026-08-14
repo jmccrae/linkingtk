@@ -24,7 +24,7 @@ download) unless a MultiKE ``fit()`` actually runs.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -39,6 +39,7 @@ def encode_literals(
     max_length: int = 16,
     batch_size: int = 256,
     random_state: int | None = None,
+    device: Any = "cpu",
 ) -> npt.NDArray[np.float32]:
     """Encode ``texts`` into ``(len(texts), embedding_dim)`` L2-normalized vectors.
 
@@ -54,6 +55,13 @@ def encode_literals(
 
     Returns a plain numpy array aligned 1:1 with ``texts`` -- callers
     build their own ``text -> row index`` mapping.
+
+    Args:
+        device: Torch device the model and every batch run on -- this is
+            a batched transformer forward pass over potentially thousands
+            of names/values, the single most GPU-friendly step in
+            MultiKE's training pipeline. The returned array is always a
+            plain CPU numpy array regardless of this setting.
     """
     import torch
     from transformers import AutoModel, AutoTokenizer
@@ -63,9 +71,10 @@ def encode_literals(
 
     if random_state is not None:
         torch.manual_seed(random_state)
+        torch.cuda.manual_seed_all(random_state)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name).to(device)
     model.eval()
 
     pooled_batches: list[torch.Tensor] = []
@@ -78,7 +87,7 @@ def encode_literals(
                 truncation=True,
                 max_length=max_length,
                 return_tensors="pt",
-            )
+            ).to(device)
             output = model(**encoded)
             mask = encoded["attention_mask"].unsqueeze(-1).float()
             summed = (output.last_hidden_state * mask).sum(dim=1)
@@ -87,8 +96,10 @@ def encode_literals(
 
         pooled = torch.nn.functional.normalize(torch.cat(pooled_batches, dim=0), dim=1)
         hidden_size = pooled.shape[1]
-        projection = torch.nn.init.orthogonal_(torch.empty(hidden_size, embedding_dim))
+        projection = torch.nn.init.orthogonal_(
+            torch.empty(hidden_size, embedding_dim, device=device)
+        )
         projected = torch.nn.functional.normalize(pooled @ projection, dim=1)
 
-    result: npt.NDArray[np.float32] = projected.numpy().astype(np.float32)
+    result: npt.NDArray[np.float32] = projected.cpu().numpy().astype(np.float32)
     return result

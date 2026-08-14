@@ -102,8 +102,9 @@ def _attr_margin_loss(
     import torch
     import torch.nn.functional as functional
 
-    pos_t = torch.from_numpy(pos).long()
-    neg_t = torch.from_numpy(neg).long()
+    device = entity_embeds_ce.device
+    pos_t = torch.from_numpy(pos).long().to(device)
+    neg_t = torch.from_numpy(neg).long().to(device)
     pos_chars = functional.normalize(char_embeds[value_char_ids[pos_t[:, 2]]], dim=2)
     neg_chars = functional.normalize(char_embeds[value_char_ids[neg_t[:, 2]]], dim=2)
     pe = functional.normalize(entity_embeds_ce[pos_t[:, 0]], dim=1)
@@ -204,7 +205,7 @@ def train_joint_epoch(
     import torch
     import torch.nn.functional as functional
 
-    entity_t = torch.from_numpy(entity_ids).long()
+    entity_t = torch.from_numpy(entity_ids).long().to(entity_embeds.device)
     for _ in range(steps):
         se = functional.normalize(entity_embeds[entity_t], dim=1)
         ce = functional.normalize(entity_embeds_ce[entity_t], dim=1)

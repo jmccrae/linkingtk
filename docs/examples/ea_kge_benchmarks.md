@@ -18,6 +18,12 @@ Requires the `kge` optional dependency group — install with
 `uv sync --extra kge`. Fetches a ~28MB zip over the network the first time
 it's run; cached under `~/.cache/linkingtk/downloads/` after that.
 
+Every hand-rolled-PyTorch linker below (all except `KGELinker`, which is
+pykeen-backed and handles device placement on its own) accepts a
+`device` constructor parameter — `"cpu"` (default) or `"cuda"`/`"cuda:0"`
+— for training on a GPU. It's purely additive: results are unaffected,
+only wall-clock time changes.
+
 New knowledge-graph-embedding EA linkers are benchmarked here as an
 additional section, rather than as a new page per method.
 

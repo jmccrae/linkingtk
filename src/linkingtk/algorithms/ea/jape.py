@@ -75,6 +75,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
+from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_training import build_shared_id_mappings
 from linkingtk.algorithms.ea._jape_torch import (
     build_kg_context,
@@ -141,6 +142,9 @@ class JAPELinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        device: Torch device to train on, e.g. ``"cpu"`` (default) or
+            ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
+            as CPU numpy arrays regardless of this setting.
     """
 
     def __init__(
@@ -156,6 +160,7 @@ class JAPELinker(BaseLinker):
         attr_max_epoch: int = 200,
         sub_mat_size: int = 1000,
         matching: Matcher = DEFAULT_MATCHER,
+        device: str = "cpu",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.num_epochs = num_epochs
@@ -168,6 +173,7 @@ class JAPELinker(BaseLinker):
         self.attr_max_epoch = attr_max_epoch
         self.sub_mat_size = sub_mat_size
         self.matching = matching
+        self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._fitted = False
 
@@ -230,7 +236,8 @@ class JAPELinker(BaseLinker):
         Raises:
             LinkingTKError: If none of ``ground_truth``'s pairs have both
                 ids present in ``dataset1``/``dataset2`` -- nothing to
-                seed the shared embedding table with.
+                seed the shared embedding table with -- or if ``device``
+                is invalid or unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         try:
@@ -239,8 +246,10 @@ class JAPELinker(BaseLinker):
         except ImportError as exc:
             raise OptionalDependencyError("JAPELinker", "kge") from exc
 
+        device = resolve_device(self.device)
         if random_state is not None:
             torch.manual_seed(random_state)
+            torch.cuda.manual_seed_all(random_state)
         rng = np.random.default_rng(random_state)
 
         ids1 = {entity.id for entity in dataset1}
@@ -266,7 +275,7 @@ class JAPELinker(BaseLinker):
         ctx2 = build_kg_context(mapped2)
 
         entity_embeds, relation_embeds = self._init_structural_embeddings(
-            torch, functional, len(entity_to_id), len(relation_to_id)
+            torch, functional, len(entity_to_id), len(relation_to_id), device
         )
         optimizer = torch.optim.Adagrad([entity_embeds, relation_embeds], lr=self.learning_rate)
         sim_optimizer = torch.optim.Adagrad([entity_embeds], lr=self.learning_rate)
@@ -279,6 +288,7 @@ class JAPELinker(BaseLinker):
             attribute_triples1,
             attribute_triples2,
             rng,
+            device,
         )
 
         val_pairs = [
@@ -312,7 +322,7 @@ class JAPELinker(BaseLinker):
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+                    current_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
                 hits1 = validation_hits1(current_embeds, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -323,7 +333,7 @@ class JAPELinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = functional.normalize(entity_embeds, dim=1).numpy()
+            final_embeds = functional.normalize(entity_embeds, dim=1).cpu().numpy()
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -331,7 +341,7 @@ class JAPELinker(BaseLinker):
         return self
 
     def _init_structural_embeddings(
-        self, torch: Any, functional: Any, num_entities: int, num_relations: int
+        self, torch: Any, functional: Any, num_entities: int, num_relations: int, device: Any
     ) -> tuple[Any, Any]:
         """Truncated-normal init (matches OpenEA's ``init="normal"``, same as `IPTransELinker`)."""
         std = 1.0 / math.sqrt(self.embedding_dim)
@@ -340,7 +350,10 @@ class JAPELinker(BaseLinker):
             return torch.nn.Parameter(
                 functional.normalize(
                     torch.nn.init.trunc_normal_(
-                        torch.empty(size, self.embedding_dim), std=std, a=-2 * std, b=2 * std
+                        torch.empty(size, self.embedding_dim, device=device),
+                        std=std,
+                        a=-2 * std,
+                        b=2 * std,
                     ),
                     dim=1,
                 )
@@ -357,6 +370,7 @@ class JAPELinker(BaseLinker):
         attribute_triples1: list[Triple] | None,
         attribute_triples2: list[Triple] | None,
         rng: np.random.Generator,
+        device: Any,
     ) -> tuple[npt.NDArray[np.floating[Any]] | None, npt.NDArray[np.int64], npt.NDArray[np.int64]]:
         """Train Attr2Vec and build the thresholded attribute-similarity matrix.
 
@@ -393,6 +407,7 @@ class JAPELinker(BaseLinker):
             self.batch_size,
             self.learning_rate,
             rng,
+            device,
         )
 
         pool1_labels, pool2_labels = reference_pools(

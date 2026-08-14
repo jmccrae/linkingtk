@@ -97,8 +97,9 @@ def _margin_loss(
     import torch
     import torch.nn.functional as functional
 
-    pos_t = torch.from_numpy(pos).long()
-    neg_t = torch.from_numpy(neg).long()
+    device = entity_embeds.device
+    pos_t = torch.from_numpy(pos).long().to(device)
+    neg_t = torch.from_numpy(neg).long().to(device)
     h = functional.normalize(entity_embeds[pos_t[:, 0]], dim=1)
     r = functional.normalize(relation_embeds[pos_t[:, 1]], dim=1)
     t = functional.normalize(entity_embeds[pos_t[:, 2]], dim=1)
@@ -182,19 +183,20 @@ def _path_loss(
     import torch
     import torch.nn.functional as functional
 
+    device = relation_embeds.device
     empty = np.empty(0, dtype=np.int64)
     idxp1 = rng.integers(0, len(ctx1.paths), size=path_batch1) if path_batch1 else empty
     idxp2 = rng.integers(0, len(ctx2.paths), size=path_batch2) if path_batch2 else empty
     pos_paths = np.concatenate([ctx1.paths[idxp1], ctx2.paths[idxp2]], axis=0)
     if len(pos_paths) == 0:
-        return torch.tensor(0.0)
+        return torch.tensor(0.0, device=device)
 
     neg_paths1 = sample_negative_path_relations(ctx1.paths[idxp1], ctx1.relation_pool, rng)
     neg_paths2 = sample_negative_path_relations(ctx2.paths[idxp2], ctx2.relation_pool, rng)
     neg_paths = np.concatenate([neg_paths1, neg_paths2], axis=0)
 
-    pos_paths_t = torch.from_numpy(pos_paths).long()
-    neg_paths_t = torch.from_numpy(neg_paths).long()
+    pos_paths_t = torch.from_numpy(pos_paths).long().to(device)
+    neg_paths_t = torch.from_numpy(neg_paths).long().to(device)
     prx = functional.normalize(relation_embeds[pos_paths_t[:, 0]], dim=1)
     pry = functional.normalize(relation_embeds[pos_paths_t[:, 1]], dim=1)
     pr = functional.normalize(relation_embeds[pos_paths_t[:, 2]], dim=1)
@@ -239,7 +241,7 @@ def bootstrap_round(
         return
 
     with torch.no_grad():
-        current = functional.normalize(entity_embeds, dim=1).numpy()
+        current = functional.normalize(entity_embeds, dim=1).cpu().numpy()
     sim_mat = current[pool1_ids] @ current[pool2_ids].T
     pairs = find_new_pairs(sim_mat, sim_th)
     if not pairs:
@@ -286,8 +288,9 @@ def _weighted_margin_loss(
     import torch
     import torch.nn.functional as functional
 
-    pos_t = torch.from_numpy(pos).long()
-    neg_t = torch.from_numpy(neg).long()
+    device = entity_embeds.device
+    pos_t = torch.from_numpy(pos).long().to(device)
+    neg_t = torch.from_numpy(neg).long().to(device)
     h = functional.normalize(entity_embeds[pos_t[:, 0]], dim=1)
     r = functional.normalize(relation_embeds[pos_t[:, 1]], dim=1)
     t = functional.normalize(entity_embeds[pos_t[:, 2]], dim=1)
@@ -296,7 +299,7 @@ def _weighted_margin_loss(
     nt = functional.normalize(entity_embeds[neg_t[:, 2]], dim=1)
     pos_score = ((h + r - t) ** 2).sum(dim=1)
     neg_score = ((nh + nr - nt) ** 2).sum(dim=1)
-    w = torch.from_numpy(weights).float()
+    w = torch.from_numpy(weights).float().to(device)
     loss: torch.Tensor = (w * torch.relu(pos_score + margin - neg_score)).sum()
     return loss
 
