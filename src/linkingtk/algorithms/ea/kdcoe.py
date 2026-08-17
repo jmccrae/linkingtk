@@ -41,6 +41,16 @@ convergence (now also pulled toward those newly found pairs via a
 pairs the same way -- stopping when a round re-discovers nothing beyond
 what's already known (``max_co_training_iters`` caps the worst case).
 
+**Key finding shared with
+[MTransELinker][linkingtk.algorithms.ea.mtranse.MTransELinker]**: both
+mapping-loss optimizers (the seed-pair one and the newly-bootstrapped-pair
+one) must update the shared entity embeddings *as well as* the mapping
+matrix, matching OpenEA's ``generate_optimizer(loss, lr, var_list=None,
+...)`` -- leaving ``var_list`` unset makes TensorFlow differentiate
+against every trainable variable the loss touches, not just the mapping
+matrix. Restricting either optimizer here to just the mapping matrix
+converges roughly an order of magnitude slower.
+
 **Key finding from reading the reference source, not obvious from the
 paper**: `_get_desc_input` doesn't require every entity to have a real
 description triple -- entities without one fall back to their own local
@@ -366,8 +376,10 @@ class KDCoELinker(BaseLinker):
         structural_optimizer = torch.optim.Adagrad(
             [entity_embeds, relation_embeds], lr=self.learning_rate
         )
-        mapping_optimizer = torch.optim.Adagrad([mapping_mat], lr=self.learning_rate)
-        mapping_optimizer_new = torch.optim.Adagrad([mapping_mat], lr=self.learning_rate)
+        mapping_optimizer = torch.optim.Adagrad([mapping_mat, entity_embeds], lr=self.learning_rate)
+        mapping_optimizer_new = torch.optim.Adagrad(
+            [mapping_mat, entity_embeds], lr=self.learning_rate
+        )
         desc_encoder = build_description_encoder(self.wv_dim, self.default_desc_length).to(device)
         desc_optimizer = torch.optim.Adagrad(desc_encoder.parameters(), lr=self.learning_rate)
 

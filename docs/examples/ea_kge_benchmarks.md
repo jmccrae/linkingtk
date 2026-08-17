@@ -94,20 +94,27 @@ uv run python examples/mtranse_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.06533333333333333, 'Hits@10': 0.26095238095238094, 'MRR': 0.13192045857536516}
+Metrics: {'Hits@1': 0.24514285714285713, 'Hits@10': 0.563047619047619, 'MRR': 0.34934607320595473}
 ```
 
-**Falls well short of MTransE's own published EN-FR-15K-V1 numbers**
-(Hits@1=0.247, Hits@10=0.564, MRR=0.351) once ranking is genuinely
-exhaustive -- this section previously reported Hits@1=0.567,
-*exceeding* the published number, but that number came from
-`LabelOverlap(max_matches=10)` blocking restricting every source
-entity's candidate pool to at most 10 before scoring. MTransE's shared
-TransE embedding space plus a single learned mapping matrix apparently
-doesn't discriminate well across the full ~10500-entity test-target
-pool, even though it's nearly always right when only a handful of
-plausible (label-similar) candidates are under consideration. See
-[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
+**Matches MTransE's own published EN-FR-15K-V1 numbers closely**
+(Hits@1=0.247, Hits@10=0.564, MRR=0.351). This section previously
+reported Hits@1=0.065 under exhaustive ranking -- a real bug, not an
+inherent limitation of the method, found by directly running OpenEA's
+own TensorFlow reference implementation against byte-identical data and
+comparing training trajectories: OpenEA's own `generate_optimizer(loss,
+lr, var_list=None, ...)` for the mapping loss leaves `var_list` unset,
+which makes TensorFlow's `compute_gradients` differentiate against
+*every* trainable variable the loss touches -- not just the mapping
+matrix, but the shared entity embeddings too. This port's mapping
+optimizer only included the mapping matrix (the more "obvious" reading
+of the algorithm), silently dropping that second training signal and
+leaving the mapping loss converging roughly an order of magnitude
+slower than OpenEA's real training run. See
+[issue #26](https://github.com/jmccrae/linkingtk/issues/26). A separate,
+smaller factor: this example now uses `EnFr15KAttrDataset` instead of
+`EnFr15KDataset`, since the latter's rehosted zip is missing ~20% of
+relation triples relative to OpenEA's own release.
 
 ## IPTransE
 
@@ -234,24 +241,24 @@ uv run python examples/kdcoe_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.061047619047619045, 'Hits@10': 0.2338095238095238, 'MRR': 0.11854192788671802}
+Metrics: {'Hits@1': 0.2018095238095238, 'Hits@10': 0.47104761904761905, 'MRR': 0.2927737429133085}
 ```
 
-**Falls well short of KDCoE's own published EN-FR-15K-V1 numbers**
-(Hits@1=0.581, Hits@10=0.721, MRR=0.628) once ranking is genuinely
-exhaustive -- this section previously reported a blocking-inflated
-Hits@1=0.541 (with Hits@10/MRR that even exceeded the published
-numbers). Under exhaustive ranking, KDCoE's structural+mapping half now
-scores close to (in fact slightly below) plain
-[`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker]'s own
-exhaustive numbers on this dataset -- consistent with the diagnostic
-below, which already found the co-trained description signal wasn't
-adding real value on this dataset, just measured against a
-blocking-inflated baseline at the time. Investigated directly rather
-than assumed: a diagnostic run found the description encoder's cosine
-similarities saturate near `1.0` for ~99.9% of reference-pool pairs
-regardless of correctness (median ~0.9998), so `desc_sim_th` couldn't act
-as a confidence filter -- feeding that many low-precision pairs into the
+**Improved substantially but still falls short of KDCoE's own published
+EN-FR-15K-V1 numbers** (Hits@1=0.581, Hits@10=0.721, MRR=0.628). This
+section previously reported Hits@1=0.061 under exhaustive ranking;
+KDCoE shares [`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker]'s
+mapping-loss bug (see [issue #26](https://github.com/jmccrae/linkingtk/issues/26))
+-- its mapping optimizers only included the mapping matrix, not the
+shared entity embeddings OpenEA's `var_list=None` also updates -- and
+fixing it alone recovered most of the gap (0.061 -> 0.202), a >3x
+improvement. The remaining shortfall against the 0.581 target is
+consistent with the diagnostic below, which independently found the
+co-trained description signal isn't adding real value on this dataset:
+a diagnostic run found the description encoder's cosine similarities
+saturate near `1.0` for ~99.9% of reference-pool pairs regardless of
+correctness (median ~0.9998), so `desc_sim_th` couldn't act as a
+confidence filter -- feeding that many low-precision pairs into the
 structural mapping loss collapsed structural Hits@1 from a clean ~0.40 to
 near-zero (see `KDCoELinker`'s module docstring for the fix:
 description-found and structurally-found bootstrap pairs are now tracked
@@ -263,9 +270,9 @@ KG1 entities, 0.5% of KG2 entities -- see
 so most entities' "descriptions" are single-word label fallbacks (see
 `KDCoELinker`'s module docstring) rather than the rich descriptive text
 KDCoE's method -- and its published benchmark -- depends on. See
-[issue #37](https://github.com/jmccrae/linkingtk/issues/37) for the
-exhaustive-vs-blocking finding common to MTransE/IPTransE/JAPE/KDCoE
-above.
+[issue #29](https://github.com/jmccrae/linkingtk/issues/29), which
+remains open pending further investigation into the description
+pathway's weak signal.
 
 ## AttrE
 

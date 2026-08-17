@@ -13,9 +13,8 @@ docs/examples/ea_kge_benchmarks.md for methodology details and
 kge_benchmark.py for the (architecturally simpler) KGELinker equivalent.
 
 Requires the `kge` optional dependency group (for `torch`) — install
-with `uv sync --extra kge`. Fetches a ~28MB zip over the network the
-first time it's run (shared by all DBP15K/OpenEA datasets); cached under
-~/.cache/linkingtk/downloads after that.
+with `uv sync --extra kge`. Fetches a multi-MB zip over the network the
+first time it's run; cached under ~/.cache/linkingtk/downloads after that.
 
 Run with: `uv run python examples/mtranse_benchmark.py`
 """
@@ -23,19 +22,19 @@ Run with: `uv run python examples/mtranse_benchmark.py`
 from __future__ import annotations
 
 from linkingtk.algorithms.ea import MTransELinker
-from linkingtk.datasets import EnFr15KDataset
+from linkingtk.datasets import EnFr15KAttrDataset
 from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 
 def main() -> None:
-    dataset = EnFr15KDataset()
+    dataset = EnFr15KAttrDataset()
     entities1, entities2, _ = dataset.load()
     train_pairs, test_pairs, val_pairs = dataset.load_splits()
     graph1, graph2 = dataset.load_graphs()
     graph = to_triples(graph1) + to_triples(graph2)
 
-    linker = MTransELinker(num_epochs=500)  # embedding_dim=100, batch_size=5000
+    linker = MTransELinker(num_epochs=2000)  # embedding_dim=100, batch_size=5000
     linker.fit(
         entities1,
         entities2,
@@ -43,7 +42,7 @@ def main() -> None:
         graph=graph,
         random_state=0,
         val_ground_truth=val_pairs,
-        patience=5,
+        patience=15,
         eval_every=10,
     )
     test_source_ids = {s for s, _ in test_pairs}

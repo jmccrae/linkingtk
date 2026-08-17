@@ -25,10 +25,18 @@ reading in ways that matter for reproducing its published numbers:
 - Entities and relations are L2-normalized to the unit sphere on *every*
   forward pass (not just at initialization) -- this is what keeps the
   no-negative-sampling loss from collapsing to the trivial zero solution.
-- Alignment signal comes entirely from a learned square mapping matrix
-  (orthogonally initialized, trained via its own optimizer against a
-  soft-orthogonality-regularized loss over seed pairs), not from injecting
-  pseudo-triples into the embedding space itself.
+- Alignment signal comes from a learned square mapping matrix (orthogonally
+  initialized, trained against a soft-orthogonality-regularized loss over
+  seed pairs), not from injecting pseudo-triples into the embedding space
+  itself. Critically, the mapping loss's optimizer updates *both* the
+  mapping matrix *and* the shared entity embeddings themselves -- OpenEA's
+  ``generate_optimizer(loss, lr, var_list=None, ...)`` leaves ``var_list``
+  unset, which makes TensorFlow's ``compute_gradients`` differentiate
+  against every trainable variable connected to the loss, not just the
+  mapping matrix. Restricting this port's mapping optimizer to only the
+  mapping matrix (the more "obvious" reading of the algorithm) silently
+  drops that second training signal and leaves the mapping loss converging
+  roughly an order of magnitude slower.
 """
 
 from __future__ import annotations
@@ -202,7 +210,11 @@ class MTransELinker(BaseLinker):
         triple_optimizer = torch.optim.Adagrad(
             [entity_embeds, relation_embeds], lr=self.learning_rate
         )
-        mapping_optimizer = torch.optim.Adagrad([mapping_mat], lr=self.learning_rate)
+        # `entity_embeds` is included here (not just `mapping_mat`) to match
+        # OpenEA's `generate_optimizer(mapping_loss, lr, var_list=None, ...)`,
+        # which implicitly differentiates against every trainable variable
+        # the loss touches -- see the module docstring.
+        mapping_optimizer = torch.optim.Adagrad([mapping_mat, entity_embeds], lr=self.learning_rate)
 
         triple_steps = max(1, math.ceil(len(heads) / self.batch_size))
         seed_batch_size = max(1, len(seed_source) // triple_steps)
