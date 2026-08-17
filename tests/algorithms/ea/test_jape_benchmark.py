@@ -55,7 +55,6 @@ def test_jape_linker_reports_ranked_metrics_on_held_out_split(tmp_path: Path) ->
         batch_size=64,
         learning_rate=0.05,
         attr_max_epoch=20,
-        sub_mat_size=2,
     )
     linker.fit(
         entities1,

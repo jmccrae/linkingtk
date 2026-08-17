@@ -9,7 +9,6 @@ from linkingtk.algorithms.ea._jape_training import (
     pool_entity_attribute_vectors,
     reference_pools,
     select_popular_attributes,
-    sparsify_to_row_argmax,
 )
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
@@ -139,13 +138,15 @@ class TestFitAndLink:
 
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
+        assert linker.attr_sim_mat_ is None
+        assert linker.attr_pool1_ids_ == []
+        assert linker.attr_pool2_ids_ == []
 
     def test_partial_seed_generalizes_to_unseeded_pairs(self) -> None:
-        # Seed only 2 of 4 pairs -- attributes plus the structural signal
-        # together should still recover the rest (mirrors IPTransE's
-        # equivalent test). sub_mat_size=2 matches the resulting
-        # reference-pool size (2 entities/side) so the attribute
-        # regularization step actually fires every epoch.
+        # Seed only 2 of 4 pairs -- the shared "next" relation embedding
+        # (same id on both sides) plus the two seeded endpoints should
+        # let structural TransE alone recover the rest by chain symmetry
+        # (mirrors IPTransE's equivalent test).
         partial_ground_truth = [("kg1:a", "kg2:w"), ("kg1:c", "kg2:y")]
         linker = JAPELinker(
             embedding_dim=16,
@@ -154,7 +155,6 @@ class TestFitAndLink:
             learning_rate=0.1,
             attr_max_epoch=20,
             top_attr_threshold=1.0,
-            sub_mat_size=2,
         )
         linker.fit(
             _KG1,
@@ -171,6 +171,10 @@ class TestFitAndLink:
 
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
+        assert linker.attr_sim_mat_ is not None
+        assert linker.attr_sim_mat_.shape == (2, 2)
+        assert set(linker.attr_pool1_ids_) == {"kg1:b", "kg1:d"}
+        assert set(linker.attr_pool2_ids_) == {"kg2:x", "kg2:z"}
 
     def test_early_stopping_runs_without_error(self) -> None:
         linker = JAPELinker(embedding_dim=16, num_epochs=100, batch_size=32)
@@ -261,25 +265,6 @@ class TestPoolEntityAttributeVectors:
 
         assert np.allclose(vectors[0], [0.6, 0.8])
         assert np.allclose(vectors[1], [0.0, 0.0])
-
-
-class TestSparsifyToRowArgmax:
-    def test_keeps_only_each_rows_maximum(self) -> None:
-        sim_mat = np.array([[0.9, 0.8, 0.85], [0.1, 0.95, 0.2]])
-
-        sparse = sparsify_to_row_argmax(sim_mat)
-
-        assert np.array_equal(sparse, np.array([[0.9, 0.0, 0.0], [0.0, 0.95, 0.0]]))
-
-    def test_all_zero_row_stays_zero(self) -> None:
-        sim_mat = np.array([[0.0, 0.0], [0.5, 0.3]])
-
-        sparse = sparsify_to_row_argmax(sim_mat)
-
-        assert np.array_equal(sparse, np.array([[0.0, 0.0], [0.5, 0.0]]))
-
-    def test_empty_matrix(self) -> None:
-        assert sparsify_to_row_argmax(np.empty((0, 0))).shape == (0, 0)
 
 
 class TestReferencePools:

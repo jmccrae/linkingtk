@@ -161,48 +161,6 @@ def pool_entity_attribute_vectors(
     return vectors / norms
 
 
-def sparsify_to_row_argmax(
-    sim_mat: npt.NDArray[np.floating[Any]],
-) -> npt.NDArray[np.floating[Any]]:
-    """Zero out every row entry except its own maximum.
-
-    **Deviation from OpenEA**, added after benchmarking JAPE on real
-    EN-FR-15K-V1 data (#28): attribute-predicate mean-pooled entity
-    vectors are coarse (type-level, not entity-level) at this scale --
-    empirically, ~85% of entity pairs cleared even a ``0.99`` magnitude
-    threshold, with the correct-pair/random-pair similarity gap tiny
-    (0.926 vs 0.857 mean, both near the 1.0 ceiling). OpenEA's own
-    thresholded-but-dense ``attr_sim_mat`` (see ``jape.py``'s module
-    docstring) turns into a near-uniform blend over thousands of
-    same-type entities once this saturation happens, which measurably
-    *hurt* Hits@1 relative to structural-only training in testing (0.16
-    vs 0.52) -- and reducing ``attr_sim_mat_beta`` didn't fix it, since
-    Adagrad's own gradient normalization makes the regularizer's step
-    size largely insensitive to a constant loss-scale factor. Restricting
-    each row to its single best-attribute-matched column (mirroring
-    [IPTransELinker][linkingtk.algorithms.ea.iptranse.IPTransELinker]'s
-    proven ``find_new_pairs`` row-wise-argmax pattern) changes *what* the
-    regularizer pulls toward, not just how hard, which isn't subject to
-    that same optimizer-normalization blind spot.
-
-    Args:
-        sim_mat: Similarity matrix, already magnitude-thresholded (see
-            ``attr_sim_mat_threshold``) -- zero rows stay all-zero.
-
-    Returns:
-        A copy of ``sim_mat`` with every row's non-maximum entries zeroed.
-    """
-    sparse = np.zeros_like(sim_mat)
-    if sim_mat.size == 0:
-        return sparse
-    rows = np.arange(sim_mat.shape[0])
-    best_col = np.argmax(sim_mat, axis=1)
-    best_val = sim_mat[rows, best_col]
-    nonzero_rows = best_val > 0
-    sparse[rows[nonzero_rows], best_col[nonzero_rows]] = best_val[nonzero_rows]
-    return sparse
-
-
 def reference_pools(
     entity_ids1: list[str],
     entity_ids2: list[str],

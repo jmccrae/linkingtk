@@ -164,14 +164,14 @@ OpenEA's own release. See
 of JAPE's (Sun, Hu & Li, ISWC 2017) actual training procedure, ported
 directly from [OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
 rather than from a from-scratch reading of the paper: a shared-id
-structural TransE embedding (trained via `pos_loss - neg_alpha * neg_loss`,
-no margin/hinge) is regularized by an **attribute-correlation embedding**
--- a skip-gram-style model trained over which attribute predicates
-co-occur on the same entity, with seed pairs' attribute vocabularies
-merged for cross-lingual correlation signal. The resulting per-entity
-attribute similarity, thresholded to keep only confident correlations,
-pulls the structural embeddings of not-yet-seeded entities toward each
-other during joint training.
+structural TransE embedding is trained via `pos_loss - neg_alpha *
+neg_loss` (no margin/hinge). JAPE also trains an **attribute-correlation
+embedding** -- a skip-gram-style model trained over which attribute
+predicates co-occur on the same entity, with seed pairs' attribute
+vocabularies merged for cross-lingual correlation signal -- and builds a
+thresholded per-entity attribute-similarity matrix, exposed post-`fit()`
+as `attr_sim_mat_`. **This matrix no longer perturbs the structural
+embeddings** (see below for why); it's purely an inspectable diagnostic.
 
 **Note the different dataset**: `EnFr15KDataset` (used by the linkers
 above) has no attribute triples at all, so this uses
@@ -194,17 +194,32 @@ uv run python examples/jape_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.05838095238095238, 'Hits@10': 0.23866666666666667, 'MRR': 0.12116213264596698}
+Metrics: {'Hits@1': 0.3028571428571429, 'Hits@10': 0.6379047619047619, 'MRR': 0.4126005570555578}
 ```
 
-**Falls well short of JAPE's own published EN-FR-15K-V1 numbers**
-(Hits@1=0.263, Hits@10=0.595, MRR=0.372) once ranking is genuinely
-exhaustive -- same finding as MTransE/IPTransE above (this section
-previously reported a blocking-inflated Hits@1=0.448). The
-attribute-correlation regularizer clearly isn't enough on its own to
-make the structural embedding discriminate well across the full
-test-target pool. See
-[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
+**Clears JAPE's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.263, Hits@10=0.595, MRR=0.372). This section previously reported
+Hits@1=0.058 under exhaustive ranking -- a real bug in **OpenEA's own
+reference implementation**, found by diffing its `jape.py` against what
+it actually executes: `_define_sim_graph` builds `self.sim_optimizer`
+(the gradient-apply op for the attribute-similarity regularizer), but
+`launch_sim_1epo` only ever fetches `self.sim_loss` via `session.run` --
+`self.sim_optimizer` is never passed to `session.run` anywhere in the
+file. In TensorFlow 1.x an unfetched op simply never executes, so
+OpenEA's own published JAPE numbers were produced by pure
+structural-TransE training; the attribute pipeline runs and computes a
+loss value (used only for a print statement) that never touches the
+entity embeddings. Confirmed by running OpenEA's real reference
+implementation directly: it reproduces its own published Hits@1 (0.261)
+without ever applying that gradient step. A version of this port that
+*does* apply the attribute-similarity gradient (either OpenEA's literal
+dense/thresholded matrix, or an earlier row-argmax-sparsified variant
+this port used) scores far below both that number and structural-only
+training. This port now matches OpenEA's real (not its apparent)
+behavior -- `fit()` still trains Attr2Vec and builds the
+attribute-similarity matrix, exposed via `attr_sim_mat_` for inspection,
+but never uses it to update the structural embeddings. See
+[issue #28](https://github.com/jmccrae/linkingtk/issues/28), now closed.
 
 ## KDCoE
 
@@ -464,7 +479,11 @@ replaced blocking-restricted benchmark scoring with
 [`rank_exhaustive`](../reference/eval.md), matching OpenEA's methodology
 exactly -- every number on this page reflects that. The result was not
 uniform: MTransE, IPTransE, JAPE and KDCoE (structural-embedding-only or
-weakly-regularized methods) all now fall well short of their published
-targets once ranking is genuinely exhaustive, while AttrE, IMUSE and
-MultiKE (all backed by strong attribute-value signal) still clear
-theirs. See each section above for details.
+weakly-regularized methods) all initially fell well short of their
+published targets once ranking was genuinely exhaustive, while AttrE,
+IMUSE and MultiKE (all backed by strong attribute-value signal) already
+cleared theirs. Each of MTransE/IPTransE/JAPE turned out to hide a real,
+separate bug (a mapping-optimizer scoping bug, a lossy rehosted dataset,
+and an inert attribute-similarity gradient in OpenEA's own reference
+implementation, respectively) rather than a genuine limitation of the
+method -- see each section above for details. KDCoE remains open.

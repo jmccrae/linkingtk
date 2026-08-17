@@ -24,24 +24,40 @@ JAPE combines two signals:
   on the same entity -- entities that are a known seed pair have their
   attribute vocabularies merged before training, which is what makes this
   cross-lingual-aware. The trained attribute embeddings produce a
-  per-entity attribute vector (mean-pooled, L2-normalized); a similarity
-  matrix between the two KGs' not-yet-seeded entities, thresholded to keep
-  only confident correlations, then **regularizes the structural
-  embeddings during joint training** (not a post-hoc concatenation): each
-  epoch, a random subsample of KG1's reference entities has its structural
-  embedding pulled toward an attribute-similarity-weighted blend of KG2's
-  structural embeddings, via a separate optimizer.
+  per-entity attribute vector (mean-pooled, L2-normalized) and a
+  similarity matrix between the two KGs' not-yet-seeded entities,
+  thresholded to keep only confident correlations -- exposed post-`fit()`
+  as `attr_sim_mat_`/`attr_pool1_ids_`/`attr_pool2_ids_` (see below for
+  why this is no longer used to perturb the structural embeddings).
+
+**Found while diagnosing #28's exhaustive-evaluation gap**: OpenEA's own
+reference `jape.py` builds a `sim_optimizer` (an `apply_gradients` op meant
+to regularize `ent_embeds` toward the attribute-similarity blend each
+epoch) but its `launch_sim_1epo` only ever fetches `self.sim_loss` via
+`session.run` -- `self.sim_optimizer` is never passed to `session.run`
+anywhere in the file. In TensorFlow 1.x an unfetched op simply never
+executes, so **OpenEA's own published JAPE numbers were produced by pure
+structural-TransE training** -- the attribute pipeline runs and computes a
+loss value (used only for a print statement) that never actually touches
+the entity embeddings. Confirmed empirically: running OpenEA's real
+reference implementation reproduces its published Hits@1 (0.261 vs. target
+0.263); a version of this port that *does* apply the attribute-similarity
+gradient (either OpenEA's literal dense/thresholded matrix, or this port's
+previous row-argmax-sparsified variant) scores far below both that number
+and structural-only training under exhaustive ranking. This port now
+matches OpenEA's real (not its apparent) behavior: `fit()` still trains
+Attr2Vec and builds the attribute-similarity matrix -- exposed for
+inspection -- but never uses it to update the structural embeddings.
 
 Deviations from OpenEA's own code:
 
 - **`fit()` gains two new optional parameters**, `attribute_triples1`/
   `attribute_triples2` -- the paper's method genuinely doesn't fit the EA
   linker family's existing signature otherwise, since attribute triples
-  are JAPE's whole point. Left as `None` (default), `fit()` degrades to
-  structural-only training (a legitimate, still-functional mode -- just
-  not what's benchmarked against JAPE's published number, which needs the
-  attribute signal). Most of this repo's EA dataset loaders have no
-  attribute triples at all; see
+  are JAPE's whole point. Left as `None` (default), `fit()` skips the
+  attribute pipeline entirely (a no-op difference now that its output
+  never affects training anyway). Most of this repo's EA dataset loaders
+  have no attribute triples at all; see
   [linkingtk.datasets.openea_native][]'s module docstring for the one
   that does and why it's a separate loader family from
   [linkingtk.datasets.openea][]'s.
@@ -55,14 +71,7 @@ Deviations from OpenEA's own code:
   than OpenEA's own `valid_entities + test_entities` -- the same
   deviation, for the same reason, already documented on
   [IPTransELinker][linkingtk.algorithms.ea.iptranse.IPTransELinker]'s
-  bootstrap pool.
-- **The attribute-similarity matrix is sparsified to each row's single
-  best match**, not left as OpenEA's dense, thresholded-only matrix --
-  see ``_jape_training.py``'s ``sparsify_to_row_argmax`` docstring for
-  why (found while benchmarking on real EN-FR-15K-V1 data: attribute-
-  predicate mean-pooled vectors are coarse enough at this scale that the
-  dense blend measurably hurt Hits@1 relative to structural-only
-  training, and reducing ``attr_sim_mat_beta`` didn't fix it).
+  bootstrap pool. Only affects the exposed `attr_sim_mat_`, not training.
 """
 
 from __future__ import annotations
@@ -80,7 +89,6 @@ from linkingtk.algorithms.ea._iptranse_training import build_shared_id_mappings
 from linkingtk.algorithms.ea._jape_torch import (
     build_kg_context,
     train_attr2vec,
-    train_sim_epoch,
     train_triple_epoch,
     validation_hits1,
 )
@@ -90,7 +98,6 @@ from linkingtk.algorithms.ea._jape_training import (
     pool_entity_attribute_vectors,
     reference_pools,
     select_popular_attributes,
-    sparsify_to_row_argmax,
 )
 from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
@@ -104,13 +111,17 @@ if TYPE_CHECKING:
 
 
 class JAPELinker(BaseLinker):
-    """Scores candidate pairs via a shared TransE space regularized by attribute similarity.
+    """Scores candidate pairs via a shared TransE space, plus an inspectable attribute similarity.
 
     Must be [fit][linkingtk.algorithms.ea.jape.JAPELinker.fit] before
     [link][linkingtk.algorithms.base.BaseLinker.link] can be called. See
     the module docstring for how this differs from
     [MTransELinker][linkingtk.algorithms.ea.mtranse.MTransELinker]/
-    [IPTransELinker][linkingtk.algorithms.ea.iptranse.IPTransELinker].
+    [IPTransELinker][linkingtk.algorithms.ea.iptranse.IPTransELinker], and
+    in particular why the attribute-similarity matrix built from
+    `attribute_triples1`/`attribute_triples2` no longer perturbs the
+    trained structural embeddings (it's exposed post-`fit()` as
+    `attr_sim_mat_` instead).
 
     Args:
         embedding_dim: Dimensionality of the trained structural and
@@ -130,15 +141,10 @@ class JAPELinker(BaseLinker):
             predicates to keep, by descending frequency. OpenEA's
             published value is ``0.9``.
         attr_sim_mat_threshold: Attribute-similarity values below this are
-            zeroed out before being used as a structural regularizer.
-            OpenEA's published value is ``0.95``.
-        attr_sim_mat_beta: Weight on the attribute-similarity
-            regularization loss. OpenEA's published value is ``0.001``.
+            zeroed out in the exposed `attr_sim_mat_`. OpenEA's published
+            value is ``0.95``.
         attr_max_epoch: Attr2Vec training epochs. OpenEA's published value
             is ``200``.
-        sub_mat_size: Reference-pool-1 subsample size per
-            attribute-similarity regularization step. OpenEA's published
-            value is ``1000``.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
@@ -156,9 +162,7 @@ class JAPELinker(BaseLinker):
         neg_alpha: float = 0.1,
         top_attr_threshold: float = 0.9,
         attr_sim_mat_threshold: float = 0.95,
-        attr_sim_mat_beta: float = 0.001,
         attr_max_epoch: int = 200,
-        sub_mat_size: int = 1000,
         matching: Matcher = DEFAULT_MATCHER,
         device: str = "cpu",
     ) -> None:
@@ -169,13 +173,21 @@ class JAPELinker(BaseLinker):
         self.neg_alpha = neg_alpha
         self.top_attr_threshold = top_attr_threshold
         self.attr_sim_mat_threshold = attr_sim_mat_threshold
-        self.attr_sim_mat_beta = attr_sim_mat_beta
         self.attr_max_epoch = attr_max_epoch
-        self.sub_mat_size = sub_mat_size
         self.matching = matching
         self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
         self._fitted = False
+        self.attr_sim_mat_: npt.NDArray[np.floating[Any]] | None = None
+        """Thresholded attribute-similarity matrix from the last `fit()` call, or ``None`` if no
+        attribute triples were given. Rows/columns correspond to
+        `attr_pool1_ids_`/`attr_pool2_ids_`. Diagnostic only -- see the
+        module docstring for why this doesn't affect the trained
+        embeddings."""
+        self.attr_pool1_ids_: list[str] = []
+        """Entity ids indexing `attr_sim_mat_`'s rows."""
+        self.attr_pool2_ids_: list[str] = []
+        """Entity ids indexing `attr_sim_mat_`'s columns."""
 
     def fit(
         self,
@@ -190,7 +202,7 @@ class JAPELinker(BaseLinker):
         attribute_triples1: list[Triple] | None = None,
         attribute_triples2: list[Triple] | None = None,
     ) -> JAPELinker:
-        """Train a shared TransE space, optionally regularized by attribute similarity.
+        """Train a shared TransE space; optionally build an inspectable attribute-similarity matrix.
 
         Args:
             dataset1: Source entities -- also used to partition ``graph``
@@ -225,8 +237,10 @@ class JAPELinker(BaseLinker):
                 ``load_attribute_triples()``
                 (see [linkingtk.datasets.openea_native][]). If ``None``
                 (default) or empty, together with ``attribute_triples2``,
-                training falls back to structural-only (see the module
-                docstring's first deviation).
+                the attribute pipeline is skipped entirely -- doesn't
+                affect the trained structural embeddings either way (see
+                the module docstring's discovered-upstream-bug note), but
+                skips training Attr2Vec and populating ``attr_sim_mat_``.
             attribute_triples2: KG2's attribute triples. See
                 ``attribute_triples1``.
 
@@ -278,17 +292,18 @@ class JAPELinker(BaseLinker):
             torch, functional, len(entity_to_id), len(relation_to_id), device
         )
         optimizer = torch.optim.Adagrad([entity_embeds, relation_embeds], lr=self.learning_rate)
-        sim_optimizer = torch.optim.Adagrad([entity_embeds], lr=self.learning_rate)
 
-        attr_sim_mat, pool1_ids, pool2_ids = self._setup_attribute_pipeline(
-            dataset1,
-            dataset2,
-            entity_to_id,
-            seed_pairs,
-            attribute_triples1,
-            attribute_triples2,
-            rng,
-            device,
+        self.attr_sim_mat_, self.attr_pool1_ids_, self.attr_pool2_ids_ = (
+            self._setup_attribute_pipeline(
+                dataset1,
+                dataset2,
+                entity_to_id,
+                seed_pairs,
+                attribute_triples1,
+                attribute_triples2,
+                rng,
+                device,
+            )
         )
 
         val_pairs = [
@@ -308,17 +323,6 @@ class JAPELinker(BaseLinker):
                 self.batch_size,
                 self.neg_alpha,
             )
-            if attr_sim_mat is not None:
-                train_sim_epoch(
-                    entity_embeds,
-                    sim_optimizer,
-                    attr_sim_mat,
-                    pool1_ids,
-                    pool2_ids,
-                    rng,
-                    self.sub_mat_size,
-                    self.attr_sim_mat_beta,
-                )
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
@@ -371,16 +375,21 @@ class JAPELinker(BaseLinker):
         attribute_triples2: list[Triple] | None,
         rng: np.random.Generator,
         device: Any,
-    ) -> tuple[npt.NDArray[np.floating[Any]] | None, npt.NDArray[np.int64], npt.NDArray[np.int64]]:
+    ) -> tuple[npt.NDArray[np.floating[Any]] | None, list[str], list[str]]:
         """Train Attr2Vec and build the thresholded attribute-similarity matrix.
 
-        Returns ``(None, empty, empty)`` if no attribute triples are
-        given, or if attribute/training-pair selection ends up empty --
-        both are treated as "structural-only training", not an error.
+        Purely diagnostic since the discovery documented in the module
+        docstring: OpenEA's own reference implementation computes this
+        exact matrix but never uses it to update the structural
+        embeddings, so this port doesn't either -- the return value is
+        only ever stored on ``self`` (``attr_sim_mat_``/
+        ``attr_pool1_ids_``/``attr_pool2_ids_``) for inspection.
+
+        Returns ``(None, [], [])`` if no attribute triples are given, or
+        if attribute/training-pair selection ends up empty.
         """
-        empty = np.empty(0, dtype=np.int64)
         if not attribute_triples1 and not attribute_triples2:
-            return None, empty, empty
+            return None, [], []
         attribute_triples1 = attribute_triples1 or []
         attribute_triples2 = attribute_triples2 or []
 
@@ -392,7 +401,7 @@ class JAPELinker(BaseLinker):
         )
         training_pairs = generate_training_pairs(entity_attrs)
         if not training_pairs:
-            return None, empty, empty
+            return None, [], []
 
         attr_to_id = {attr: index for index, attr in enumerate(sorted(selected))}
         training_pairs_ids = np.array(
@@ -416,7 +425,7 @@ class JAPELinker(BaseLinker):
             seed_pairs,
         )
         if not pool1_labels or not pool2_labels:
-            return None, empty, empty
+            return None, [], []
 
         vectors1 = pool_entity_attribute_vectors(
             pool1_labels, entity_attrs, attr_to_id, attr_embeds
@@ -426,11 +435,8 @@ class JAPELinker(BaseLinker):
         )
         attr_sim_mat = vectors1 @ vectors2.T
         attr_sim_mat[attr_sim_mat < self.attr_sim_mat_threshold] = 0.0
-        attr_sim_mat = sparsify_to_row_argmax(attr_sim_mat)
 
-        pool1_ids = np.array([entity_to_id[label] for label in pool1_labels], dtype=np.int64)
-        pool2_ids = np.array([entity_to_id[label] for label in pool2_labels], dtype=np.int64)
-        return attr_sim_mat, pool1_ids, pool2_ids
+        return attr_sim_mat, pool1_labels, pool2_labels
 
     def link(
         self,

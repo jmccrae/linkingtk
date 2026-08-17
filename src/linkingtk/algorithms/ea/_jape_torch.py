@@ -209,52 +209,6 @@ def train_triple_epoch(
         optimizer.step()
 
 
-def train_sim_epoch(
-    entity_embeds: torch.nn.Parameter,
-    sim_optimizer: torch.optim.Optimizer,
-    attr_sim_mat: npt.NDArray[np.floating[Any]],
-    pool1_ids: npt.NDArray[np.int64],
-    pool2_ids: npt.NDArray[np.int64],
-    rng: np.random.Generator,
-    sub_mat_size: int,
-    attr_sim_mat_beta: float,
-) -> None:
-    """One epoch of JAPE's attribute-similarity structural regularizer.
-
-    Mirrors ``launch_sim_1epo``: repeatedly subsample ``sub_mat_size``
-    reference-pool-1 entities, blend reference-pool-2's *current*
-    structural embeddings by their (precomputed, fixed) attribute
-    similarity, and pull the sampled entities' own structural embeddings
-    toward that blend. If ``pool1_ids`` is smaller than ``sub_mat_size``,
-    no steps run this epoch (matches OpenEA's own integer-division
-    behavior, which floors to zero steps in that case).
-    """
-    import torch
-    import torch.nn.functional as functional
-
-    if len(pool1_ids) == 0 or len(pool2_ids) == 0:
-        return
-    steps = len(pool1_ids) // sub_mat_size
-    if steps == 0:
-        return
-
-    device = entity_embeds.device
-    pool2_t = torch.from_numpy(pool2_ids).long().to(device)
-    for _ in range(steps):
-        idx = rng.choice(len(pool1_ids), size=sub_mat_size, replace=False)
-        batch_entities = torch.from_numpy(pool1_ids[idx]).long().to(device)
-        sim_rows = torch.from_numpy(attr_sim_mat[idx, :]).float().to(device)
-
-        ref1 = functional.normalize(entity_embeds[batch_entities], dim=1)
-        ref2 = functional.normalize(entity_embeds[pool2_t], dim=1)
-        ref2_trans = functional.normalize(sim_rows @ ref2, dim=1)
-        loss = attr_sim_mat_beta * ((ref1 - ref2_trans) ** 2).sum()
-
-        sim_optimizer.zero_grad()
-        loss.backward()  # type: ignore[no-untyped-call]
-        sim_optimizer.step()
-
-
 def validation_hits1(
     embeds: npt.NDArray[np.floating[Any]],
     entity_to_id: dict[str, int],
