@@ -16,9 +16,8 @@ docs/examples/ea_kge_benchmarks.md for methodology details and
 mtranse_benchmark.py for the (bootstrapping-free) MTransE equivalent.
 
 Requires the `kge` optional dependency group (for `torch`) — install
-with `uv sync --extra kge`. Fetches a ~28MB zip over the network the
-first time it's run (shared by all DBP15K/OpenEA datasets); cached under
-~/.cache/linkingtk/downloads after that.
+with `uv sync --extra kge`. Fetches a multi-MB zip over the network the
+first time it's run; cached under ~/.cache/linkingtk/downloads after that.
 
 Run with: `uv run python examples/iptranse_benchmark.py`
 """
@@ -26,13 +25,13 @@ Run with: `uv run python examples/iptranse_benchmark.py`
 from __future__ import annotations
 
 from linkingtk.algorithms.ea import IPTransELinker
-from linkingtk.datasets import EnFr15KDataset
+from linkingtk.datasets import EnFr15KAttrDataset
 from linkingtk.eval import Evaluator, rank_exhaustive
 from linkingtk.utils.graph import to_triples
 
 
 def main() -> None:
-    dataset = EnFr15KDataset()
+    dataset = EnFr15KAttrDataset()
     entities1, entities2, _ = dataset.load()
     train_pairs, test_pairs, val_pairs = dataset.load_splits()
     graph1, graph2 = dataset.load_graphs()

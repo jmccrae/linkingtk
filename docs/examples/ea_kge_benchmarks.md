@@ -143,14 +143,20 @@ uv run python examples/iptranse_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.11695238095238095, 'Hits@10': 0.2885714285714286, 'MRR': 0.1770713003174724}
+Metrics: {'Hits@1': 0.21123809523809522, 'Hits@10': 0.45485714285714285, 'MRR': 0.2937679316921805}
 ```
 
-**Falls short of IPTransE's own published EN-FR-15K-V1 numbers**
-(Hits@1=0.169, Hits@10=0.390, MRR=0.243) once ranking is genuinely
-exhaustive -- same finding as MTransE above (this section previously
-reported a blocking-inflated Hits@1=0.493). See
-[issue #37](https://github.com/jmccrae/linkingtk/issues/37).
+**Clears IPTransE's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.169, Hits@10=0.390, MRR=0.243). This section previously
+reported Hits@1=0.117 -- unlike
+[MTransE](https://github.com/jmccrae/linkingtk/issues/26)/[KDCoE](https://github.com/jmccrae/linkingtk/issues/29),
+IPTransE's own optimizers already covered every trainable variable
+correctly (it uses OpenEA's "sharing" alignment module, with no separate
+mapping matrix to under-scope). The gap here was entirely the dataset:
+this example now uses `EnFr15KAttrDataset` instead of `EnFr15KDataset`,
+whose rehosted zip is missing ~20% of relation triples relative to
+OpenEA's own release. See
+[issue #27](https://github.com/jmccrae/linkingtk/issues/27), now closed.
 
 ## JAPE
 
