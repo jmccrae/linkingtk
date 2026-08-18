@@ -52,6 +52,10 @@
 
 ::: linkingtk.algorithms.ea.multike
 
+### SEA
+
+::: linkingtk.algorithms.ea.sea
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el

@@ -561,3 +561,53 @@ separate bug (a mapping-optimizer scoping bug, a lossy rehosted dataset,
 and an inert attribute-similarity gradient in OpenEA's own reference
 implementation, respectively) rather than a genuine limitation of the
 method -- see each section above for details. KDCoE remains open.
+
+## SEA
+
+[`SEALinker`][linkingtk.algorithms.ea.sea.SEALinker] is a faithful
+reimplementation of SEA's (Pei, Yu, Hoehndorf & Zhang, WWW 2019) actual
+training procedure, ported directly from
+[OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
+rather than from a from-scratch reading of the paper: a standard
+margin-based structural TransE embedding, in a single shared table with
+disjoint per-KG ids (the same "mapping" alignment module MTransE uses,
+unlike IPTransE's id-sharing or BootEA's pseudo-triple "swapping"), is
+bridged across KGs by **two** learned mapping matrices -- `mat_1`
+(KG1 -> KG2) and `mat_2` (KG2 -> KG1) -- trained jointly against a
+supervised term over seed pairs *and* a semi-supervised cycle-consistency
+term over unlabeled entities (map through `mat_1` then back through
+`mat_2`, penalize drift from the original embedding; no ground-truth
+pairing needed for that second term, which is what "semi-supervised"
+refers to in the method's name).
+
+**Same dataset note as MTransE/IPTransE/BootEA above**: this uses
+`EnFr15KAttrDataset`, not `EnFr15KDataset`, for the same
+complete-relation-triples reason -- SEA is pure-structural-plus-mapping, so
+the attribute triples themselves go unused.
+
+```python
+--8<-- "examples/sea_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/sea_benchmark.py
+```
+
+```text
+3000 train / 1500 val / 10500 test pairs
+Metrics: {'Hits@1': 0.31923809523809527, 'Hits@10': 0.6981904761904761, 'MRR': 0.4397783366828669}
+```
+
+**Clears SEA's own published EN-FR-15K-V1 numbers on all three metrics**
+(Hits@1=0.280, Hits@10=0.642, MRR=0.397) on the first real-dataset run --
+no reopening/reworking needed, same clean outcome as
+[BootEA](https://github.com/jmccrae/linkingtk/issues/30). The two-mapping-
+matrix supervised term plus the semi-supervised cycle-consistency term over
+unlabeled entities (this repo's stand-in for OpenEA's own `test_links +
+valid_links` pool -- see
+[`SEALinker`][linkingtk.algorithms.ea.sea.SEALinker]'s module docstring)
+together give a stronger alignment signal than MTransE's single-matrix
+mapping loss, consistent with the two methods' published gap. See
+[issue #33](https://github.com/jmccrae/linkingtk/issues/33), now closed.
