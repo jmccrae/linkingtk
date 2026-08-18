@@ -230,6 +230,49 @@ def find_new_pairs(
     return [(int(i), int(best_col[i]), float(best_val[i])) for i in rows]
 
 
+def find_mutual_pairs(
+    sim_mat: npt.NDArray[np.floating[Any]],
+    sim_th: float = 0.0,
+) -> list[tuple[int, int, float]]:
+    """Reciprocal top-1 match finder for bootstrapping under saturated similarities.
+
+    Keeps ``(i, j)`` only if ``j`` is row ``i``'s best match **and** ``i`` is
+    column ``j``'s best match (both argmaxes agree), unlike
+    [find_new_pairs][linkingtk.algorithms.ea._iptranse_training.find_new_pairs]'s
+    one-sided row-argmax. Added for KDCoE's description pathway (#29): once a
+    similarity matrix saturates near ``1.0`` for nearly every entry (as the
+    description encoder's cosine similarities do on real EN-FR-15K-V1 --
+    median ~0.9998), an absolute threshold like ``desc_sim_th`` can't
+    discriminate anything -- almost every row clears it. Reciprocity stays
+    useful under saturation because the *argmax positions* (which column is
+    largest per row, which row is largest per column) still vary even when
+    the values themselves are nearly indistinguishable, and requiring both
+    sides to agree rejects most of the one-sided noise a lone threshold
+    can't. ``sim_th`` is kept only as a coarse sanity floor (default ``0.0``,
+    i.e. no real filtering) -- reciprocity is the operative filter here, not
+    the threshold.
+
+    Args:
+        sim_mat: ``(n1, n2)`` similarity matrix (e.g. dot products of
+            unit-normalized embeddings).
+        sim_th: Minimum similarity for a reciprocal match to count. Defaults
+            to ``0.0`` (no real floor) since reciprocity itself is the
+            filter this function is for.
+
+    Returns:
+        ``(row_index, col_index, similarity)`` tuples for every reciprocal
+        best-match pair clearing ``sim_th``. Empty if ``sim_mat`` is empty.
+    """
+    if sim_mat.size == 0:
+        return []
+    best_col = np.argmax(sim_mat, axis=1)
+    best_row = np.argmax(sim_mat, axis=0)
+    rows = np.arange(sim_mat.shape[0])
+    mutual = rows[best_row[best_col[rows]] == rows]
+    mutual = mutual[sim_mat[mutual, best_col[mutual]] > sim_th]
+    return [(int(i), int(best_col[i]), float(sim_mat[i, best_col[i]])) for i in mutual]
+
+
 def pseudo_triples_for_pair(
     entity_a: int,
     entity_b: int,

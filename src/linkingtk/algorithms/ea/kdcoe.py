@@ -102,27 +102,38 @@ document:
   (twice -- once per phase, each reset every outer co-training iteration,
   matching OpenEA's own per-phase ``flag1``/``flag2`` reset) rather than
   OpenEA's exact two-flag ``early_stop()``.
-- **Description-found and structurally-found bootstrap pairs are tracked
-  and fed back in separately**, not merged into one shared set the way
-  OpenEA's own ``self.new_alignment``/``self.new_alignment_index`` are.
-  This is a deviation added after benchmarking on real EN-FR-15K-V1 data
-  (#29): the description encoder's cosine similarities saturate near
+- **Description-found bootstrap pairs use reciprocal best-match, not
+  ``desc_sim_th``.** Diagnosed while benchmarking on real EN-FR-15K-V1
+  data (#29): the description encoder's cosine similarities saturate near
   ``1.0`` for nearly every reference-pool pair regardless of correctness
-  (median ~0.9998 in testing, so ``desc_sim_th=0.95`` accepts ~99.9% of
-  the pool each round) -- ``find_new_pairs``'s row-argmax already
-  discards *columns*, but here even each row's single best match isn't
-  reliably correct at this data scale (row-argmax accuracy ~35%, and this
-  dataset's real ``.../description`` triple coverage is sparse -- 10.5%
-  of KG1 entities, 0.5% of KG2 -- so most descriptions are single-word
-  label fallbacks, a weak signal). Feeding that many low-precision pairs
-  into the structural mapping loss (even down-weighted by ``new_param``)
-  collapsed structural Hits@1 from a clean ~0.40 to near-zero in testing.
-  The description phase's own training tolerates being retrained on its
-  own noisy self-found pairs without degrading (Hits@1 stayed ~0.44-0.46
-  across iterations), so only structurally-*found* pairs (``sim_th``,
-  whose similarity distribution isn't saturated the same way) feed the
-  structural mapping-new loss; description-found pairs only feed the
-  description phase's own next-iteration training.
+  (median ~0.9998 in testing), so an absolute threshold like
+  ``desc_sim_th=0.95`` accepts ~99.9% of the pool each round and can't
+  discriminate anything -- ``find_new_pairs``'s row-argmax+threshold
+  (OpenEA's own ``find_potential_alignment_greedily``) isn't a usable
+  filter once similarities are this uniform. This dataset's real
+  ``.../description`` triple coverage is also sparse (10.5% of KG1
+  entities, 0.5% of KG2), so most descriptions are single-word label
+  fallbacks -- but 60.7% of EN-FR-15K-V1's ground-truth pairs share a
+  literally identical local entity name across languages (OpenEA's own
+  documented v1-dataset "name bias"; their README recommends v2.0 to
+  remove it), which the label-fallback pathway can exploit even without
+  rich text: the description encoder's own validation Hits@1 is a real
+  44-46% across co-training iterations, well above chance. The earlier
+  fix here (before this reciprocal-match change) fully separated
+  description-found pairs from structural training to stop the ~99.9%
+  false-positive rate from collapsing structural Hits@1 from a clean
+  ~0.40 to near-zero -- but that also meant the description encoder's
+  genuine 44-46% signal could never improve the final structural+mapping
+  embedding at all. Switching the description pathway's bootstrap rounds
+  to
+  [find_mutual_pairs][linkingtk.algorithms.ea._iptranse_training.find_mutual_pairs]
+  (reciprocal row/column argmax agreement, which stays discriminative
+  under saturation since the *argmax positions* still vary even when the
+  values don't) raises precision enough that description-found pairs are
+  now merged back into the same pool that feeds the structural
+  mapping-new loss, matching OpenEA's own unified
+  ``self.new_alignment``/``self.new_alignment_index`` design rather than
+  permanently working around it.
 """
 
 from __future__ import annotations
@@ -136,7 +147,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
 from linkingtk.algorithms.ea._device import resolve_device
-from linkingtk.algorithms.ea._iptranse_training import find_new_pairs
+from linkingtk.algorithms.ea._iptranse_training import find_mutual_pairs, find_new_pairs
 from linkingtk.algorithms.ea._jape_training import reference_pools
 from linkingtk.algorithms.ea._kdcoe_text import (
     build_word_ids,
@@ -208,9 +219,14 @@ class KDCoELinker(BaseLinker):
             is ``4``.
         desc_batch_size: Mini-batch size for description-encoder training.
             OpenEA's published value is ``512``.
-        desc_sim_th: Minimum description-embedding similarity for a
-            bootstrap round to accept a newly found pair. OpenEA's
-            published value is ``0.95``.
+        desc_sim_th: Kept for interface parity with OpenEA's published
+            value (``0.95``), but **not** the operative filter for the
+            description pathway's bootstrap rounds -- see the module
+            docstring's "reciprocal best-match" deviation. Description
+            similarities saturate near ``1.0`` on real data, making an
+            absolute threshold meaningless; bootstrap rounds instead use
+            [find_mutual_pairs][linkingtk.algorithms.ea._iptranse_training.find_mutual_pairs]'s
+            reciprocal-agreement filter.
         sim_th: Minimum (mapped) structural-embedding similarity for a
             bootstrap round to accept a newly found pair. OpenEA's
             published value is ``0.8``.
@@ -412,11 +428,12 @@ class KDCoELinker(BaseLinker):
                 break
             desc_bootstrapped_pairs |= desc_found
 
+            mapping_new_pairs = rel_bootstrapped_pairs | desc_bootstrapped_pairs
             bootstrap_source_ids = np.array(
-                [entity_to_id[s] for s, _ in rel_bootstrapped_pairs], dtype=np.int64
+                [entity_to_id[s] for s, _ in mapping_new_pairs], dtype=np.int64
             )
             bootstrap_target_ids = np.array(
-                [entity_to_id[t] for _, t in rel_bootstrapped_pairs], dtype=np.int64
+                [entity_to_id[t] for _, t in mapping_new_pairs], dtype=np.int64
             )
             self._train_structural_phase(
                 torch,
@@ -642,7 +659,7 @@ class KDCoELinker(BaseLinker):
             embeds1_np = embeds1.cpu().numpy()
             embeds2_np = embeds2.cpu().numpy()
         sim_mat = embeds1_np @ embeds2_np.T
-        found = find_new_pairs(sim_mat, self.desc_sim_th)
+        found = find_mutual_pairs(sim_mat)
         return {(pool1[i], pool2[j]) for i, j, _ in found}
 
     def _find_new_pairs_via_structural(

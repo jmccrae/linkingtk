@@ -262,38 +262,52 @@ uv run python examples/kdcoe_benchmark.py
 
 ```text
 3000 train / 1500 val / 10500 test pairs
-Metrics: {'Hits@1': 0.2018095238095238, 'Hits@10': 0.47104761904761905, 'MRR': 0.2927737429133085}
+Metrics: {'Hits@1': 0.4855238095238095, 'Hits@10': 0.6959047619047619, 'MRR': 0.5539438288378163}
 ```
 
-**Improved substantially but still falls short of KDCoE's own published
-EN-FR-15K-V1 numbers** (Hits@1=0.581, Hits@10=0.721, MRR=0.628). This
-section previously reported Hits@1=0.061 under exhaustive ranking;
-KDCoE shares [`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker]'s
-mapping-loss bug (see [issue #26](https://github.com/jmccrae/linkingtk/issues/26))
--- its mapping optimizers only included the mapping matrix, not the
-shared entity embeddings OpenEA's `var_list=None` also updates -- and
-fixing it alone recovered most of the gap (0.061 -> 0.202), a >3x
-improvement. The remaining shortfall against the 0.581 target is
-consistent with the diagnostic below, which independently found the
-co-trained description signal isn't adding real value on this dataset:
-a diagnostic run found the description encoder's cosine similarities
-saturate near `1.0` for ~99.9% of reference-pool pairs regardless of
-correctness (median ~0.9998), so `desc_sim_th` couldn't act as a
-confidence filter -- feeding that many low-precision pairs into the
-structural mapping loss collapsed structural Hits@1 from a clean ~0.40 to
-near-zero (see `KDCoELinker`'s module docstring for the fix:
-description-found and structurally-found bootstrap pairs are now tracked
-and fed back separately). The likely root cause is data availability
-rather than a training bug: `EnFr15KAttrDataset`'s real
-`.../description`-predicate attribute-triple coverage is sparse (10.5% of
-KG1 entities, 0.5% of KG2 entities -- see
-[the datasets page](../datasets/real_world_ea.md#openea-native-format-with-attributes)),
-so most entities' "descriptions" are single-word label fallbacks (see
-`KDCoELinker`'s module docstring) rather than the rich descriptive text
-KDCoE's method -- and its published benchmark -- depends on. See
-[issue #29](https://github.com/jmccrae/linkingtk/issues/29), which
-remains open pending further investigation into the description
-pathway's weak signal.
+**Close to KDCoE's own published EN-FR-15K-V1 numbers now, though Hits@1
+still falls just short** (published Hits@1=0.581, Hits@10=0.721, MRR=0.628;
+achieved Hits@10 is 96.5% of published, MRR 88.2%, Hits@1 83.6% -- just under
+this issue's own ≥90%-relative acceptance bar of 0.523). This section
+previously reported Hits@1=0.061 under exhaustive ranking, then 0.202 after
+fixing [`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker]'s
+shared mapping-loss bug (see [issue #26](https://github.com/jmccrae/linkingtk/issues/26)),
+which KDCoE's structural half also has.
+
+At that point KDCoE's co-training loop had been diagnosed as contributing
+nothing beyond MTransE's own structural ceiling: the description encoder's
+cosine similarities saturate near `1.0` for ~99.9% of reference-pool pairs
+regardless of correctness (median ~0.9998), so the absolute `desc_sim_th`
+threshold couldn't discriminate, and a since-superseded safety fix fully
+disconnected description-found bootstrap pairs from structural training to
+stop that noise from collapsing structural Hits@1 (from a clean ~0.40 to
+near-zero). That meant the description encoder's own real signal --
+validation Hits@1 of 44-46% across co-training iterations, driven by 60.7%
+of EN-FR-15K-V1's ground-truth pairs sharing a literally identical local
+entity name across languages (OpenEA's own documented v1-dataset "name
+bias" -- their README recommends v2.0 to remove it) -- never reached the
+final embedding at all.
+
+Switching the description pathway's bootstrap-pair acceptance from
+`find_new_pairs`'s row-argmax + absolute threshold to
+[`find_mutual_pairs`][linkingtk.algorithms.ea._iptranse_training.find_mutual_pairs]'s
+reciprocal row/column argmax agreement (which stays discriminative even
+when every similarity value is close to `1.0`, since the argmax
+*positions* still vary) raised bootstrap precision enough to safely merge
+description-found pairs back into the pool feeding the structural
+mapping-new loss, matching OpenEA's own unified `self.new_alignment`
+design. That alone took Hits@1 from 0.202 to 0.486 (>2x).
+
+The "richer description data" theory this issue previously flagged as the
+likely root cause was checked directly and ruled out: OpenEA's own official
+`OpenEA_dataset_v1.1.zip` release has identical `.../description`-predicate
+coverage to `EnFr15KAttrDataset`'s rehost (10.5% of KG1 entities, 0.53% of
+KG2 -- see
+[the datasets page](../datasets/real_world_ea.md#openea-native-format-with-attributes)) --
+the rehost was already faithful; the description pathway's weak per-entity
+text was never the real bottleneck. See
+[issue #29](https://github.com/jmccrae/linkingtk/issues/29), left open for
+the remaining Hits@1 gap.
 
 ## AttrE
 

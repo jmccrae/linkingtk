@@ -5,6 +5,7 @@ import torch
 from linkingtk.algorithms.ea import IPTransELinker
 from linkingtk.algorithms.ea._iptranse_training import (
     build_shared_id_mappings,
+    find_mutual_pairs,
     find_new_pairs,
     generate_two_step_paths,
 )
@@ -229,3 +230,30 @@ class TestFindNewPairs:
 
     def test_empty_matrix_returns_no_pairs(self) -> None:
         assert find_new_pairs(np.empty((0, 0)), sim_th=0.5) == []
+
+
+class TestFindMutualPairs:
+    def test_reciprocal_top1_pairs_accepted(self) -> None:
+        sim_mat = np.array([[0.9, 0.1], [0.2, 0.95]])
+
+        pairs = find_mutual_pairs(sim_mat)
+
+        assert pairs == [(0, 0, pytest.approx(0.9)), (1, 1, pytest.approx(0.95))]
+
+    def test_one_sided_match_rejected(self) -> None:
+        # row1's best col is col0, but col0's best row is row0, not row1 --
+        # row0<->col0 is reciprocal (kept); row1 has no reciprocal match.
+        sim_mat = np.array([[0.9, 0.1], [0.8, 0.2]])
+
+        pairs = find_mutual_pairs(sim_mat)
+
+        assert pairs == [(0, 0, pytest.approx(0.9))]
+
+    def test_sim_th_filters_low_reciprocal_matches(self) -> None:
+        sim_mat = np.array([[0.3, 0.1], [0.2, 0.05]])
+
+        assert find_mutual_pairs(sim_mat, sim_th=0.0) == [(0, 0, pytest.approx(0.3))]
+        assert find_mutual_pairs(sim_mat, sim_th=0.5) == []
+
+    def test_empty_matrix_returns_no_pairs(self) -> None:
+        assert find_mutual_pairs(np.empty((0, 0))) == []
