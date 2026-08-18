@@ -100,7 +100,6 @@ from linkingtk.algorithms.ea._attre_text import (
     select_char_vocabulary,
 )
 from linkingtk.algorithms.ea._attre_torch import train_attr_epoch, train_joint_epoch
-from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_torch import validation_hits1
 from linkingtk.algorithms.ea._iptranse_training import build_shared_id_mappings
 from linkingtk.algorithms.ea._kdcoe_torch import build_kg_context, train_structural_epoch
@@ -109,6 +108,7 @@ from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, Triple, map_triples_to_ids, to_triples
 
 if TYPE_CHECKING:

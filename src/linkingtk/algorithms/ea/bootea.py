@@ -113,13 +113,13 @@ from linkingtk.algorithms.ea._bootea_training import (
     find_mwgm_pairs,
     pseudo_triples_for_pairs,
 )
-from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._jape_training import reference_pools
 from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, build_id_mappings, map_triples_to_ids, to_triples
 
 if TYPE_CHECKING:

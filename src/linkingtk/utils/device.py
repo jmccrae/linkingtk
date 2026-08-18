@@ -1,12 +1,13 @@
-"""Shared device-resolution helper for every hand-rolled-PyTorch EA linker.
+"""Shared device-resolution helper for PyTorch-backed training code.
 
 [KGELinker][linkingtk.algorithms.ea.kge.KGELinker] is excluded -- it's
 pykeen-backed, and pykeen's own trainer already handles device placement.
 Every other linker in ``linkingtk.algorithms.ea`` (``MTransELinker``,
 ``IPTransELinker``, ``JAPELinker``, ``KDCoELinker``, ``AttrELinker``,
 ``IMUSELinker``, ``MultiKELinker``) hand-rolls its own PyTorch training loop
-and calls [resolve_device][linkingtk.algorithms.ea._device.resolve_device]
-once at the top of ``fit()``.
+and calls [resolve_device][linkingtk.utils.device.resolve_device] once at
+the top of ``fit()`` -- as does
+[Trainer][linkingtk.train.trainer.Trainer].
 """
 
 from __future__ import annotations

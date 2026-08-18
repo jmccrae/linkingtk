@@ -145,7 +145,6 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.ea._iptranse_torch import validation_hits1
 from linkingtk.algorithms.ea._kdcoe_torch import build_kg_context
 from linkingtk.algorithms.ea._multike_literal import encode_literals
@@ -175,6 +174,7 @@ from linkingtk.core.entity import Entity, label_texts
 from linkingtk.core.result import AlignmentResult
 from linkingtk.datasets._util import label_from_raw
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, Triple, build_id_mappings, map_triples_to_ids, to_triples
 
 if TYPE_CHECKING:

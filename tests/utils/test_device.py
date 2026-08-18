@@ -2,8 +2,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from linkingtk.algorithms.ea._device import resolve_device  # noqa: E402
 from linkingtk.exceptions import LinkingTKError  # noqa: E402
+from linkingtk.utils.device import resolve_device  # noqa: E402
 
 
 class TestResolveDevice:

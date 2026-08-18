@@ -49,12 +49,12 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.ea._device import resolve_device
 from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, build_id_mappings, map_triples_to_ids, to_triples
 
 if TYPE_CHECKING:
