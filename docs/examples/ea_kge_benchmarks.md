@@ -265,11 +265,11 @@ uv run python examples/kdcoe_benchmark.py
 Metrics: {'Hits@1': 0.4855238095238095, 'Hits@10': 0.6959047619047619, 'MRR': 0.5539438288378163}
 ```
 
-**Close to KDCoE's own published EN-FR-15K-V1 numbers now, though Hits@1
-still falls just short** (published Hits@1=0.581, Hits@10=0.721, MRR=0.628;
-achieved Hits@10 is 96.5% of published, MRR 88.2%, Hits@1 83.6% -- just under
-this issue's own ≥90%-relative acceptance bar of 0.523). This section
-previously reported Hits@1=0.061 under exhaustive ranking, then 0.202 after
+**Close to, but just short of, KDCoE's own published EN-FR-15K-V1 numbers**
+(published Hits@1=0.581, Hits@10=0.721, MRR=0.628; achieved Hits@10 is
+96.5% of published, MRR 88.2%, Hits@1 83.6% -- just under this issue's own
+≥90%-relative acceptance bar of 0.523). This section previously reported
+Hits@1=0.061 under exhaustive ranking, then 0.202 after
 fixing [`MTransELinker`][linkingtk.algorithms.ea.mtranse.MTransELinker]'s
 shared mapping-loss bug (see [issue #26](https://github.com/jmccrae/linkingtk/issues/26)),
 which KDCoE's structural half also has.
@@ -305,9 +305,10 @@ coverage to `EnFr15KAttrDataset`'s rehost (10.5% of KG1 entities, 0.53% of
 KG2 -- see
 [the datasets page](../datasets/real_world_ea.md#openea-native-format-with-attributes)) --
 the rehost was already faithful; the description pathway's weak per-entity
-text was never the real bottleneck. See
-[issue #29](https://github.com/jmccrae/linkingtk/issues/29), left open for
-the remaining Hits@1 gap.
+text was never the real bottleneck. The remaining ~4-point Hits@1 gap is
+reported as-is rather than chased further, per this milestone's precedent
+of documenting an honest shortfall once the diagnosis is solid. See
+[issue #29](https://github.com/jmccrae/linkingtk/issues/29), now closed.
 
 ## AttrE
 
