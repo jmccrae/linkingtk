@@ -52,6 +52,10 @@
 
 ::: linkingtk.algorithms.ea.multike
 
+### RSN4EA
+
+::: linkingtk.algorithms.ea.rsn4ea
+
 ### SEA
 
 ::: linkingtk.algorithms.ea.sea
