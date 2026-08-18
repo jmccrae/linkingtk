@@ -310,6 +310,65 @@ reported as-is rather than chased further, per this milestone's precedent
 of documenting an honest shortfall once the diagnosis is solid. See
 [issue #29](https://github.com/jmccrae/linkingtk/issues/29), now closed.
 
+## BootEA
+
+[`BootEALinker`][linkingtk.algorithms.ea.bootea.BootEALinker] is a faithful
+reimplementation of BootEA's (Sun, Hu, Zhang & Qu, IJCAI 2018) actual
+training procedure, ported directly from
+[OpenEA's reference implementation](https://github.com/nju-websoft/OpenEA)
+(`approaches/bootea.py`, which extends `approaches/aligne.py`) rather than
+from a from-scratch reading of the paper. A single shared entity/relation
+embedding table (disjoint per-KG id ranges, no id merging and no learned
+mapping matrix) is trained with a double-margin "limited" loss. Three
+mechanisms distinguish it from a plain structural baseline: seed pairs are
+baked into the main structural triple set from the start as pseudo-triples
+(not a separate loss channel); negative sampling is "truncated" -- each
+corrupted head/tail is drawn from that entity's own current
+nearest-neighbor set, not uniformly; and bootstrapping uses two-sided
+editing plus true maximum-weight bipartite matching (via
+`scipy.optimize.linear_sum_assignment`, substituting for OpenEA's
+`graph_tool`/`igraph`) rather than a simpler row-argmax heuristic.
+
+**Same dataset note as IPTransE above**: this uses `EnFr15KAttrDataset`,
+not `EnFr15KDataset`, for the same complete-relation-triples reason --
+BootEA is pure-structural, so the attribute triples themselves go unused.
+
+```python
+--8<-- "examples/bootea_benchmark.py"
+```
+
+Run with:
+
+```bash
+uv run python examples/bootea_benchmark.py
+```
+
+```text
+3000 train / 1500 val / 10500 test pairs
+Metrics: {'Hits@1': 0.52, 'Hits@10': 0.7997142857142857, 'MRR': 0.6144412189182579}
+```
+
+**Clears BootEA's own published EN-FR-15K-V1 numbers**
+(Hits@1=0.507, Hits@10=0.794, MRR=0.603) on the first real-dataset run --
+no reopening/reworking needed, unlike several of this milestone's earlier
+methods.
+
+**Performance note, not a correctness one**: an early real-dataset attempt
+hit 0% GPU utilization -- profiling found two vectorization gaps in
+`_bootea_training.py`'s bootstrap/negative-sampling helpers (a per-row
+`argsort`/Python-set-membership loop in `find_mwgm_pairs`'s candidate
+filtering and in `sample_truncated_negative_triples`'s real-triple
+avoidance check, each fine at toy-fixture scale but not at ~15K-entity
+real-dataset scale, where BootEA's own published `neg_triple_num=10` --
+an order of magnitude more negatives per positive than every other linker
+in this milestone -- amplified the cost). Fixed by vectorizing the top-k
+candidate selection (one `argpartition` call instead of a per-row loop)
+and by encoding triples as single `int64` keys for `np.isin`-based
+membership checks (`assume_unique=True`, since the reference set is
+already deduplicated) instead of a Python `set` of tuples. No algorithmic
+behavior changed -- same acceptance criteria, same results, just tractable
+runtime.
+
 ## AttrE
 
 [`AttrELinker`][linkingtk.algorithms.ea.attre.AttrELinker] is a faithful

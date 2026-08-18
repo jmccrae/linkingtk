@@ -7,6 +7,7 @@ a supporting graph is normally available. See DESIGN.md for references
 """
 
 from linkingtk.algorithms.ea.attre import AttrELinker
+from linkingtk.algorithms.ea.bootea import BootEALinker
 from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
 from linkingtk.algorithms.ea.imuse import IMUSELinker
 from linkingtk.algorithms.ea.iptranse import IPTransELinker
@@ -18,6 +19,7 @@ from linkingtk.algorithms.ea.multike import MultiKELinker
 
 __all__ = [
     "AttrELinker",
+    "BootEALinker",
     "EntMatcherLinker",
     "IMUSELinker",
     "IPTransELinker",
