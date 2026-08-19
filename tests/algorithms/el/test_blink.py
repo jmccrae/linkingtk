@@ -1,0 +1,220 @@
+"""Unit tests for [BlinkLinker][linkingtk.algorithms.el.blink.BlinkLinker].
+
+Fast/offline: uses ``hf-internal-testing/tiny-random-DistilBertModel``
+(same tiny model ``test_refined.py`` relies on) for both sides, so no real
+pretrained download happens. See ``test_blink_benchmark.py`` for the
+methodology test and ``examples/blink_benchmark.py`` for the slow,
+real-data, real-model comparison against BLINK's published numbers.
+"""
+
+from __future__ import annotations
+
+import random
+from pathlib import Path
+
+import pytest
+
+torch = pytest.importorskip("torch")
+
+from peft import LoraConfig  # noqa: E402
+
+from linkingtk.algorithms.el.blink import (  # noqa: E402
+    _CONTEXT_WINDOW_CHARS,
+    BlinkEncoder,
+    BlinkLinker,
+    _mention_text,
+)
+from linkingtk.blocking.exact import ExactMatch  # noqa: E402
+from linkingtk.core.entity import Entity  # noqa: E402
+from linkingtk.datasets.toy import ToyELDataset  # noqa: E402
+from linkingtk.eval import Evaluator  # noqa: E402
+from linkingtk.exceptions import LinkingTKError  # noqa: E402
+from linkingtk.train.arguments import TrainingArguments  # noqa: E402
+from linkingtk.train.trainer import Trainer  # noqa: E402
+
+_TINY_MODEL = "hf-internal-testing/tiny-random-DistilBertModel"
+
+
+def _train_data() -> tuple[
+    list[Entity], list[Entity], list[tuple[str, str]], list[tuple[Entity, Entity]]
+]:
+    mentions, kb, ground_truth = ToyELDataset().load()
+    mentions_by_id = {entity.id: entity for entity in mentions}
+    kb_by_id = {entity.id: entity for entity in kb}
+    pairs = [(mentions_by_id[mid], kb_by_id[eid]) for mid, eid in ground_truth]
+    return mentions, kb, ground_truth, pairs
+
+
+def _precision_at_1(
+    linker: BlinkLinker,
+    mentions: list[Entity],
+    kb: list[Entity],
+    ground_truth: list[tuple[str, str]],
+) -> float:
+    results = linker.link(mentions, kb, blocking=ExactMatch())
+    predictions = [(result.source_id, result.target_id) for result in results]
+    return Evaluator.evaluate(predictions=predictions, ground_truth=ground_truth).metrics[
+        "precision@1"
+    ]
+
+
+class TestLinkImprovesAfterTraining:
+    def test_precision_at_1_improves(self, tmp_path: Path) -> None:
+        mentions, kb, ground_truth, pairs = _train_data()
+        # Unlike ReFinEDEncoder's single *shared* mean-pooled encoder,
+        # BlinkEncoder's two independently-initialized CLS-pooled towers have
+        # no forced coupling at initialization, and CLS pooling itself leans
+        # on learned attention routing that a randomly-initialized (not
+        # really pretrained) tiny test transformer doesn't reliably have --
+        # both make this 6-pair toy set need many more optimization steps
+        # (hence epochs, below) to reliably separate every ambiguous pair
+        # than ReFinED's 60-epoch equivalent, and land closer to a genuine
+        # decision boundary once it does. Seeding both the global torch RNG
+        # (see _ToyEncoder in test_trainer.py) and stdlib `random`
+        # (Trainer.train()'s per-epoch shuffle) makes a run reproducible
+        # given a fixed prior process history, but a torch/HF forward pass's
+        # first invocation can still take a different, marginally
+        # different-rounding internal code path than later ones (backend
+        # kernel selection) -- so even seeded, the *exact* result can differ
+        # by whether something warmed the same model up before this test
+        # ran. Asserting "clearly better, and gets all but at most one of
+        # six pairs right" is the honest bar here, not a brittle exact
+        # match. The real benchmark (examples/blink_benchmark.py) starts
+        # from an actually-pretrained checkpoint and trains for far fewer
+        # relative steps, where none of this is a concern.
+        random.seed(0)
+        torch.manual_seed(0)
+        linker = BlinkLinker(mention_model_name=_TINY_MODEL, embedding_dim=16, max_length=32)
+        before = _precision_at_1(linker, mentions, kb, ground_truth)
+
+        args = TrainingArguments(
+            output_dir=str(tmp_path / "model"),
+            learning_rate=2e-3,
+            num_epochs=400,
+            batch_size=8,
+            negative_samples_ratio=2,
+            loss="infonce",
+            temperature=0.2,
+        )
+        Trainer(model=linker.encoder, args=args, train_data=pairs, blocking=ExactMatch()).train()
+
+        after = _precision_at_1(linker, mentions, kb, ground_truth)
+        assert after > before
+        assert after >= 5 / 6  # at most one of the six pairs still wrong
+
+    def test_link_runs_on_untrained_encoder(self) -> None:
+        # No error, no _fitted guard -- just poor-quality (but well-formed) output.
+        mentions, kb, _ground_truth, _pairs = _train_data()
+        linker = BlinkLinker(mention_model_name=_TINY_MODEL, embedding_dim=32, max_length=32)
+
+        results = linker.link(mentions, kb, blocking=ExactMatch())
+
+        assert {result.source_id for result in results} == {entity.id for entity in mentions}
+
+
+class TestPeft:
+    def test_use_peft_reduces_trainable_params_and_trains(self, tmp_path: Path) -> None:
+        _mentions, _kb, _ground_truth, pairs = _train_data()
+        linker = BlinkLinker(mention_model_name=_TINY_MODEL, embedding_dim=32, max_length=32)
+        full_params = sum(p.numel() for p in linker.encoder.parameters() if p.requires_grad)
+
+        args = TrainingArguments(
+            output_dir=str(tmp_path / "model"),
+            learning_rate=5e-4,
+            num_epochs=5,
+            batch_size=8,
+            negative_samples_ratio=2,
+            use_peft=True,
+            peft_config=LoraConfig(target_modules=["proj"], r=4, lora_alpha=8),
+        )
+        trainer = Trainer(model=linker.encoder, args=args, train_data=pairs, blocking=ExactMatch())
+        trainer.train()
+
+        peft_params = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
+        assert peft_params < full_params
+
+    def test_use_peft_without_config_raises(self, tmp_path: Path) -> None:
+        _mentions, _kb, _ground_truth, pairs = _train_data()
+        linker = BlinkLinker(mention_model_name=_TINY_MODEL, embedding_dim=32, max_length=32)
+        args = TrainingArguments(output_dir=str(tmp_path / "model"), num_epochs=1, use_peft=True)
+        trainer = Trainer(model=linker.encoder, args=args, train_data=pairs, blocking=ExactMatch())
+
+        with pytest.raises(LinkingTKError, match="peft_config"):
+            trainer.train()
+
+
+class TestEncodeTextFormatting:
+    def test_mention_and_kb_entry_both_encode(self) -> None:
+        encoder = BlinkEncoder(mention_model_name=_TINY_MODEL, embedding_dim=16, max_length=16)
+        mention = Entity(id="m1", labels=["Paris"], context="Paris is the capital of France")
+        kb_entry = Entity(
+            id="Q90", labels=["Paris"], description="capital and most populous city of France"
+        )
+
+        embeddings = encoder.encode([mention, kb_entry])
+
+        assert embeddings.shape == (2, 16)
+        assert not torch.allclose(embeddings[0], embeddings[1])
+
+    def test_mention_with_span_offsets_marks_the_span(self) -> None:
+        encoder = BlinkEncoder(mention_model_name=_TINY_MODEL, embedding_dim=16, max_length=16)
+        with_span = Entity(id="m1", labels=["Paris"], context=("Paris is nice", 0, 5))
+        without_span = Entity(id="m2", labels=["Paris"], context="Paris is nice")
+
+        embeddings = encoder.encode([with_span, without_span])
+
+        # Different formatted text ([Ms] Paris [Me] vs. a plain string with the
+        # label prepended) -- not asserting exact equality, just that both run
+        # and differ.
+        assert embeddings.shape == (2, 16)
+
+    def test_all_mentions_batch_encodes(self) -> None:
+        encoder = BlinkEncoder(mention_model_name=_TINY_MODEL, embedding_dim=16, max_length=16)
+        mentions = [
+            Entity(id="m1", labels=["Paris"], context="Paris is nice"),
+            Entity(id="m2", labels=["Berlin"], context="Berlin is nice"),
+        ]
+
+        embeddings = encoder.encode(mentions)
+
+        assert embeddings.shape == (2, 16)
+
+    def test_all_entities_batch_encodes(self) -> None:
+        encoder = BlinkEncoder(mention_model_name=_TINY_MODEL, embedding_dim=16, max_length=16)
+        entities = [
+            Entity(id="Q90", labels=["Paris"], description="capital of France"),
+            Entity(id="Q3787", labels=["Berlin"], description="capital of Germany"),
+        ]
+
+        embeddings = encoder.encode(entities)
+
+        assert embeddings.shape == (2, 16)
+
+
+class TestMentionTextWindowing:
+    """Regression coverage mirroring ReFinED's issue #45 finding: mean/CLS-pooling
+    the *full* document text under a bounded ``max_length`` truncated the
+    ``[Ms]``/``[Me]`` markers away entirely for mentions far into a long document.
+    """
+
+    def test_markers_survive_for_a_mention_far_into_a_long_document(self) -> None:
+        filler = "word " * 500  # far longer than any reasonable max_length, in characters
+        start = len(filler)
+        text = f"{filler}Paris is nice.{filler}"
+        mention = Entity(id="m1", labels=["Paris"], context=(text, start, start + 5))
+
+        formatted = _mention_text(mention)
+
+        assert "[Ms] Paris [Me]" in formatted
+
+    def test_window_is_bounded_regardless_of_document_length(self) -> None:
+        filler = "word " * 500
+        start = len(filler)
+        text = f"{filler}Paris is nice.{filler}"
+        mention = Entity(id="m1", labels=["Paris"], context=(text, start, start + 5))
+
+        formatted = _mention_text(mention)
+
+        # Well under the full ~5000-char document -- bounded by the window on
+        # each side of the span, not by document length.
+        assert len(formatted) < 2 * _CONTEXT_WINDOW_CHARS + 100

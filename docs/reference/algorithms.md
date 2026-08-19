@@ -68,6 +68,10 @@
 
 ::: linkingtk.algorithms.el.refined
 
+### BLINK
+
+::: linkingtk.algorithms.el.blink
+
 ## Word Sense Disambiguation
 
 ::: linkingtk.algorithms.wsd

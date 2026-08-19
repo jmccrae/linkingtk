@@ -35,3 +35,7 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 ## AIDA-CoNLL
 
 ::: linkingtk.datasets.aida_conll
+
+## Zeshel
+
+::: linkingtk.datasets.zeshel
