@@ -182,9 +182,9 @@ def train_mapping_epoch(
             unlabeled2 = functional.normalize(entity_embeds[idx2], dim=1)
             cycle_121 = functional.normalize((unlabeled1 @ mapping_mat_1) @ mapping_mat_2, dim=1)
             cycle_212 = functional.normalize((unlabeled2 @ mapping_mat_2) @ mapping_mat_1, dim=1)
-            semi_loss = (
-                ((unlabeled1 - cycle_121) ** 2).sum() + ((unlabeled2 - cycle_212) ** 2).sum()
-            )
+            semi_loss = ((unlabeled1 - cycle_121) ** 2).sum() + (
+                (unlabeled2 - cycle_212) ** 2
+            ).sum()
             loss = loss + alpha_2 * semi_loss
 
         optimizer.zero_grad()

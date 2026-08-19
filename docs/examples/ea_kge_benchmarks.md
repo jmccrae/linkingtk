@@ -290,7 +290,7 @@ final embedding at all.
 
 Switching the description pathway's bootstrap-pair acceptance from
 `find_new_pairs`'s row-argmax + absolute threshold to
-[`find_mutual_pairs`][linkingtk.algorithms.ea._iptranse_training.find_mutual_pairs]'s
+`find_mutual_pairs`'s
 reciprocal row/column argmax agreement (which stays discriminative even
 when every similarity value is close to `1.0`, since the argmax
 *positions* still vary) raised bootstrap precision enough to safely merge

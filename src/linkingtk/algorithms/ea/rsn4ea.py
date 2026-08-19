@@ -44,7 +44,7 @@ published config values turn out to be dead -- never actually consulted by
   `rel_mapping` is always an empty table -- no relation-alignment signal
   exists for this task), so only the 4 live head/tail-alias variants are
   ported (see
-  [_rsn4ea_training.build_augmented_kb][linkingtk.algorithms.ea._rsn4ea_training.build_augmented_kb]).
+  `_rsn4ea_training.build_augmented_kb`).
 - `alignment_module: "mapping"` has zero effect on RSN4EA's own training
   (`run()` fully overrides `BasicModel.run()`, never calling
   `launch_training_1epo`'s mapping-loss branch) -- it only matters at the
@@ -214,7 +214,7 @@ class RSN4EALinker(BaseLinker):
             dataset2: Target entities. See ``dataset1``.
             ground_truth: List of ``(source_id, target_id)`` known-correct
                 pairs. Used to build the alias-substituted graph
-                ([build_augmented_kb][linkingtk.algorithms.ea._rsn4ea_training.build_augmented_kb])
+                (`_rsn4ea_training.build_augmented_kb`)
                 that lets sampled walks cross between KGs -- RSN4EA's only
                 alignment-training mechanism, no separate loss channel.
             graph: The combined relational structure of both KGs -- entity

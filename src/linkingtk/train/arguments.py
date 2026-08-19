@@ -33,7 +33,7 @@ class TrainingArguments:
             other pair's target in the batch, plus each anchor's own
             mined hard negatives, as negatives and applies a
             softmax-temperature cross-entropy loss. ``"margin"`` applies
-            [torch.nn.MarginRankingLoss][] between each anchor's positive
+            ``torch.nn.MarginRankingLoss`` between each anchor's positive
             and each of its mined hard negatives.
         temperature: Softmax temperature for the ``"infonce"`` loss.
         margin: Margin for the ``"margin"`` loss.

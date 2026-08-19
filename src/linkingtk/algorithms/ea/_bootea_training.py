@@ -356,9 +356,7 @@ def sample_truncated_negative_triples(
         # `real_triples` array (tens of thousands of rows) on every call,
         # which was the actual remaining bottleneck after switching from a
         # Python set.
-        colliding = np.isin(
-            encode_triples(negatives[check_rows]), real_triples, assume_unique=True
-        )
+        colliding = np.isin(encode_triples(negatives[check_rows]), real_triples, assume_unique=True)
         check_rows = check_rows[colliding]
         if len(check_rows) == 0:
             break

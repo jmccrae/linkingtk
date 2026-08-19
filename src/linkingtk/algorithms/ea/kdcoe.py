@@ -126,7 +126,7 @@ document:
   genuine 44-46% signal could never improve the final structural+mapping
   embedding at all. Switching the description pathway's bootstrap rounds
   to
-  [find_mutual_pairs][linkingtk.algorithms.ea._iptranse_training.find_mutual_pairs]
+  `_iptranse_training.find_mutual_pairs`
   (reciprocal row/column argmax agreement, which stays discriminative
   under saturation since the *argmax positions* still vary even when the
   values don't) raises precision enough that description-found pairs are
@@ -225,7 +225,7 @@ class KDCoELinker(BaseLinker):
             docstring's "reciprocal best-match" deviation. Description
             similarities saturate near ``1.0`` on real data, making an
             absolute threshold meaningless; bootstrap rounds instead use
-            [find_mutual_pairs][linkingtk.algorithms.ea._iptranse_training.find_mutual_pairs]'s
+            `_iptranse_training.find_mutual_pairs`'s
             reciprocal-agreement filter.
         sim_th: Minimum (mapped) structural-embedding similarity for a
             bootstrap round to accept a newly found pair. OpenEA's
