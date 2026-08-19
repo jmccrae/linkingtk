@@ -57,29 +57,52 @@ uv run python examples/refined_benchmark.py
 
 ```text
 18541 train mentions / 4483 test mentions
-Metrics: {'precision@1': 0.5722424794895169, 'recall': 0.5601159937541824, 'f1': 0.5661143050388907}
+Metrics: {'precision@1': 0.8712397447584321, 'recall': 0.8527771581530226, 'f1': 0.8619095930560252}
 Reference: ReFinED's published 'w/o pretraining' ablation is ~0.846 F1
 (6-dataset average, approximate top-30-candidate width, not entity-prior-ranked)
 ```
 
-**F1 = 0.566, about 67% of the ~0.846 reference** -- a real, expected
-shortfall, not a bug: this was checked directly before accepting it.
-Ranking exhaustively against the full ~1,500-entity test-split KB first
-measured Hits@1 = 0.29; restricting to `ExactMatch` candidates (surface
-form == KB title exactly) instead measured precision@1 = 0.91 but only
-37% recall (most mentions don't share an exact string with their KB
-title). Both extremes confirm the same thing: the *disambiguation*
-quality this bi-encoder achieves, given a small correct-ish candidate
-set, is genuinely strong -- most of the remaining gap to 0.846 is
-candidate-generation quality (this repo's `LabelOverlap`-by-character-trigram
-is a cruder, purely lexical stand-in for ReFinED's actual entity-prior
-system, which is popularity-informed and mines aliases beyond simple
-string overlap), not embedding/representation quality. The rest is the
-gap DESIGN.md already anticipated: no ~100M-pair Wikipedia pretraining
-stage (only 3 epochs directly on AIDA-CoNLL's 18.5K train mentions,
-starting from a generic `distilbert-base-uncased` checkpoint, not one
-already tuned for entity descriptions). Reported as-is rather than chased
-further, per this milestone's established precedent (see
-[KDCoE's honest-shortfall writeup](ea_kge_benchmarks.md#kdcoe)) of
-documenting a diagnosed gap rather than tuning against the target
-number. See [issue #45](https://github.com/jmccrae/linkingtk/issues/45).
+**F1 = 0.862, above the ~0.846 reference** — but this section's first
+measurement was F1 = 0.566 (67% of target), which was *not* accepted as
+an expected shortfall: two real, concrete bugs were found and fixed
+first.
+
+**Bug 1 — mention markers truncated away.** `ReFinEDEncoder.encode()`
+tokenizes each mention's *entire* source document, truncated to
+`max_length` tokens, with the `[E]`/`[/E]` span markers inserted at the
+mention's real position in that document. AIDA-CoNLL documents average
+~250 tokens with mentions at a median offset of ~125 tokens into them —
+so at `max_length=64`, the markers themselves were being truncated away
+before the model ever saw them for **68% of test mentions**. Fixed by
+windowing the marked text to `_CONTEXT_WINDOW_CHARS` (100 characters)
+each side of the span before tokenizing, so the markers always survive
+regardless of document length — see
+[`_mention_text`](../reference/algorithms.md)'s docstring.
+
+**Bug 2 — most KB descriptions were silently empty.** Fetching
+descriptions in batches of 50 titles per MediaWiki API request hit an API
+behavior this loader didn't handle: a response too large to return in
+one call gets truncated to whatever fits, with a `continue` token
+signaling there's more — pages that didn't fit come back *without* an
+`extract` field at all (not an empty string). Never following that token
+meant **60% of KB entities had an empty description**, including
+extremely common ones (the batch containing "United Kingdom", "Spain",
+"Jimi Hendrix" and 27 other well-known pages returned real extracts for
+only 20 of 50). Fixed by looping on `continue` until MediaWiki stops
+sending one — see
+[`fetch_wikipedia_extracts`](../reference/datasets.md)'s docstring.
+
+Both were found by checking concrete, specific claims rather than
+accepting "missing infrastructure" as the explanation: exhaustive ranking
+first measured Hits@1 = 0.29 (a red flag, since restricting to `ExactMatch`
+candidates alone already measured 91% precision@1 on whatever it could
+answer), which raised the KB-entity-description question directly, and
+tracing that down to actual entities (not aggregate statistics) surfaced
+both bugs. Neither is present anymore, and the true "missing
+infrastructure" gap this milestone's plan anticipated (no ~100M-pair
+Wikipedia pretraining stage — only 3 epochs directly on AIDA-CoNLL's
+18.5K train mentions from a generic, not entity-linking-tuned,
+`distilbert-base-uncased` checkpoint; a cruder lexical `LabelOverlap`
+candidate generator standing in for ReFinED's popularity-informed entity
+priors) turned out not to cost anything measurable once the real bugs
+were gone. See [issue #45](https://github.com/jmccrae/linkingtk/issues/45).

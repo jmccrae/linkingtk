@@ -34,6 +34,10 @@ from linkingtk.utils.graph import Graph
 
 _MENTION_START = "[E]"
 _MENTION_END = "[/E]"
+# Chars kept each side of the mention span before marking it -- bounds the
+# marked text to a size that reliably survives tokenizer truncation
+# regardless of the source document's length (see _mention_text).
+_CONTEXT_WINDOW_CHARS = 100
 
 
 def _entity_text(entity: Entity) -> str:
@@ -43,18 +47,34 @@ def _entity_text(entity: Entity) -> str:
 
 
 def _mention_text(entity: Entity) -> str:
-    """Mark the mention span with ``[E] ... [/E]`` markers.
+    """Mark the mention span with ``[E] ... [/E]`` markers, in a local window.
 
     Uses the ``(text, start, end)`` offsets when ``context`` is a
-    [ContextWithSpan][linkingtk.core.entity.ContextWithSpan]; falls back
-    to wrapping the label and prepending it to the plain context string
-    when ``context`` carries no offsets (e.g.
-    [ToyELDataset][linkingtk.datasets.toy.ToyELDataset]'s fixture).
+    [ContextWithSpan][linkingtk.core.entity.ContextWithSpan], but only the
+    ``_CONTEXT_WINDOW_CHARS`` characters immediately surrounding the
+    span -- not the full ``text``. ``text`` is often an entire source
+    document (e.g. [AidaConllDataset][linkingtk.datasets.aida_conll.AidaConllDataset]'s
+    full news articles, averaging ~250 tokens with mentions at a median
+    offset of ~125 tokens into it); tokenizing the whole thing under
+    ``encode()``'s bounded ``max_length`` would truncate away the ``[E]``/``[/E]``
+    markers themselves for most mentions -- measured at 68% of
+    AIDA-CoNLL's test-split mentions before this windowing was added (see
+    issue #45's benchmark investigation). Falls back to wrapping the label
+    and prepending it to the plain context string when ``context`` carries
+    no offsets (e.g. [ToyELDataset][linkingtk.datasets.toy.ToyELDataset]'s
+    fixture, where ``text`` is already mention-scale).
     """
     context = entity.context
     if isinstance(context, tuple):
         text, start, end = context
-        return f"{text[:start]}{_MENTION_START} {text[start:end]} {_MENTION_END}{text[end:]}"
+        window_start = max(0, start - _CONTEXT_WINDOW_CHARS)
+        window_end = min(len(text), end + _CONTEXT_WINDOW_CHARS)
+        local_start, local_end = start - window_start, end - window_start
+        window = text[window_start:window_end]
+        return (
+            f"{window[:local_start]}{_MENTION_START} {window[local_start:local_end]} "
+            f"{_MENTION_END}{window[local_end:]}"
+        )
     label = " ".join(label_texts(entity))
     context_str = context if isinstance(context, str) else ""
     return f"{_MENTION_START} {label} {_MENTION_END} {context_str}".strip()
@@ -98,7 +118,7 @@ class ReFinEDEncoder(nn.Module):
         self,
         model_name: str = "distilbert-base-uncased",
         embedding_dim: int = 256,
-        max_length: int = 64,
+        max_length: int = 96,
     ) -> None:
         super().__init__()
         from transformers import AutoModel, AutoTokenizer
@@ -164,7 +184,7 @@ class ReFinEDLinker(BaseLinker):
         self,
         model_name: str = "distilbert-base-uncased",
         embedding_dim: int = 256,
-        max_length: int = 64,
+        max_length: int = 96,
         matching: Matcher = DEFAULT_MATCHER,
     ) -> None:
         self.encoder = ReFinEDEncoder(model_name, embedding_dim, max_length)

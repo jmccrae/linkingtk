@@ -59,7 +59,7 @@ def main() -> None:
 
     print(f"{len(train_data)} train mentions / {len(test_pairs)} test mentions")
 
-    linker = ReFinEDLinker(model_name="distilbert-base-uncased", embedding_dim=256, max_length=64)
+    linker = ReFinEDLinker(model_name="distilbert-base-uncased", embedding_dim=256, max_length=96)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     args = TrainingArguments(
         output_dir="./models/refined_aida_conll",

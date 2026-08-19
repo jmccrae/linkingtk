@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -115,3 +116,38 @@ class TestLoadSplits:
 class TestFetchWikipediaExtracts:
     def test_empty_titles_returns_empty(self) -> None:
         assert fetch_wikipedia_extracts([]) == {}
+
+    def test_follows_continue_token_for_pages_that_did_not_fit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Regression test for issue #45's benchmark investigation: MediaWiki
+        # silently *omits* the "extract" key (not an empty string) for pages
+        # that don't fit in one response, signaling more via a "continue"
+        # token. Measured on AIDA-CoNLL's real title list before this was
+        # fixed: a single 50-title batch (including "United Kingdom", "Spain",
+        # "Jimi Hendrix") returned real extracts for only 20 of the 50.
+        responses = [
+            json.dumps(
+                {
+                    "continue": {"excontinue": "2", "continue": "||"},
+                    "query": {
+                        "pages": {
+                            "1": {"title": "A", "extract": "extract of A"},
+                            "2": {"title": "B"},  # didn't fit -- no "extract" key at all
+                        }
+                    },
+                }
+            ).encode(),
+            json.dumps(
+                {"query": {"pages": {"2": {"title": "B", "extract": "extract of B"}}}}
+            ).encode(),
+        ]
+        calls = iter(responses)
+        monkeypatch.setattr(
+            "linkingtk.datasets.aida_conll.fetch_cached",
+            lambda url, cache_dir=None, headers=None: next(calls),
+        )
+
+        result = fetch_wikipedia_extracts(["A", "B"])
+
+        assert result == {"A": "extract of A", "B": "extract of B"}

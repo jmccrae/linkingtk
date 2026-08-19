@@ -58,8 +58,17 @@ def fetch_wikipedia_extracts(titles: list[str], cache_dir: Path | None = None) -
     Uses MediaWiki's ``action=query&prop=extracts`` API in batches of
     ``_EXTRACT_BATCH_SIZE`` titles per request -- not one request per
     entity, since a full AIDA-CoNLL split has thousands of unique gold
-    entities. Each batch request is cached via ``fetch_cached``, keyed by
-    its full request URL.
+    entities. A batch of ``extracts`` this size is too large for MediaWiki
+    to answer in one response: it returns as many pages as fit plus a
+    ``continue`` token, silently *omitting* the ``extract`` field (not an
+    empty string -- the key is simply absent) for whichever pages didn't
+    fit. Measured concretely on AIDA-CoNLL's real title list: the batch
+    containing "United Kingdom", "Spain", "Jimi Hendrix" and 27 other
+    well-known pages returned real extracts for only 20 of 50 -- silently
+    leaving the rest empty, not an error, before this method followed
+    ``continue`` (see issue #45's benchmark investigation). Each request
+    (initial and every continuation) is cached via ``fetch_cached``, keyed
+    by its full URL.
 
     Args:
         titles: Wikipedia page titles (underscored, as stored by the
@@ -75,7 +84,7 @@ def fetch_wikipedia_extracts(titles: list[str], cache_dir: Path | None = None) -
     extracts: dict[str, str] = {}
     for start in range(0, len(unique_titles), _EXTRACT_BATCH_SIZE):
         batch = unique_titles[start : start + _EXTRACT_BATCH_SIZE]
-        params = {
+        base_params = {
             "action": "query",
             "format": "json",
             "prop": "extracts",
@@ -84,20 +93,29 @@ def fetch_wikipedia_extracts(titles: list[str], cache_dir: Path | None = None) -
             "redirects": "1",
             "titles": "|".join(batch),
         }
-        url = f"{_WIKIPEDIA_API}?{urlencode(params)}"
-        payload = json.loads(fetch_cached(url, cache_dir, headers={"User-Agent": _USER_AGENT}))
-        query = payload.get("query", {})
-        pages = query.get("pages", {})
-        # MediaWiki resolves input titles through normalization, then
-        # redirects, before landing on a final page -- reverse both maps
-        # to recover which *input* title each returned page corresponds to.
-        source_by_normalized = {item["to"]: item["from"] for item in query.get("normalized", [])}
-        source_by_redirect = {item["to"]: item["from"] for item in query.get("redirects", [])}
-        for page in pages.values():
-            resolved_title = page.get("title", "")
-            original = source_by_redirect.get(resolved_title, resolved_title)
-            original = source_by_normalized.get(original, original)
-            extracts[original] = page.get("extract", "")
+        continue_params: dict[str, str] = {}
+        while True:
+            url = f"{_WIKIPEDIA_API}?{urlencode({**base_params, **continue_params})}"
+            payload = json.loads(fetch_cached(url, cache_dir, headers={"User-Agent": _USER_AGENT}))
+            query = payload.get("query", {})
+            pages = query.get("pages", {})
+            # MediaWiki resolves input titles through normalization, then
+            # redirects, before landing on a final page -- reverse both maps
+            # to recover which *input* title each returned page corresponds to.
+            source_by_normalized = {
+                item["to"]: item["from"] for item in query.get("normalized", [])
+            }
+            source_by_redirect = {item["to"]: item["from"] for item in query.get("redirects", [])}
+            for page in pages.values():
+                if "extract" not in page:
+                    continue  # this page didn't fit in this response; it'll come in a later one
+                resolved_title = page.get("title", "")
+                original = source_by_redirect.get(resolved_title, resolved_title)
+                original = source_by_normalized.get(original, original)
+                extracts[original] = page["extract"]
+            if "continue" not in payload:
+                break
+            continue_params = payload["continue"]
     return {title: extracts.get(title, "") for title in titles}
 
 

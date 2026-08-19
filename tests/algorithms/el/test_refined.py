@@ -17,7 +17,12 @@ torch = pytest.importorskip("torch")
 
 from peft import LoraConfig  # noqa: E402
 
-from linkingtk.algorithms.el.refined import ReFinEDEncoder, ReFinEDLinker  # noqa: E402
+from linkingtk.algorithms.el.refined import (  # noqa: E402
+    _CONTEXT_WINDOW_CHARS,
+    ReFinEDEncoder,
+    ReFinEDLinker,
+    _mention_text,
+)
 from linkingtk.blocking.exact import ExactMatch  # noqa: E402
 from linkingtk.core.entity import Entity  # noqa: E402
 from linkingtk.datasets.toy import ToyELDataset  # noqa: E402
@@ -137,3 +142,33 @@ class TestEncodeTextFormatting:
         # Different formatted text ([E] Paris [/E] vs. a plain string with the label
         # prepended) -- not asserting exact equality, just that both run and differ.
         assert embeddings.shape == (2, 16)
+
+
+class TestMentionTextWindowing:
+    """Regression coverage for issue #45's benchmark investigation: mean-pooling
+    the *full* document text under a bounded ``max_length`` truncated the
+    ``[E]``/``[/E]`` markers away entirely for 68% of AIDA-CoNLL's real test
+    mentions (median mention offset ~125 tokens into a ~250-token document).
+    """
+
+    def test_markers_survive_for_a_mention_far_into_a_long_document(self) -> None:
+        filler = "word " * 500  # far longer than any reasonable max_length, in characters
+        start = len(filler)
+        text = f"{filler}Paris is nice.{filler}"
+        mention = Entity(id="m1", labels=["Paris"], context=(text, start, start + 5))
+
+        formatted = _mention_text(mention)
+
+        assert "[E] Paris [/E]" in formatted
+
+    def test_window_is_bounded_regardless_of_document_length(self) -> None:
+        filler = "word " * 500
+        start = len(filler)
+        text = f"{filler}Paris is nice.{filler}"
+        mention = Entity(id="m1", labels=["Paris"], context=(text, start, start + 5))
+
+        formatted = _mention_text(mention)
+
+        # Well under the full ~5000-char document -- bounded by the window on
+        # each side of the span, not by document length.
+        assert len(formatted) < 2 * _CONTEXT_WINDOW_CHARS + 100
