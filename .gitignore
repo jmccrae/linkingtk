@@ -16,3 +16,6 @@ htmlcov/
 # Local dataset caches
 data/*
 !data/.gitkeep
+
+# Trained model checkpoints written by examples/*.py (e.g. Trainer's output_dir)
+models/

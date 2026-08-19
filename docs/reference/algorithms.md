@@ -64,6 +64,10 @@
 
 ::: linkingtk.algorithms.el
 
+### ReFinED
+
+::: linkingtk.algorithms.el.refined
+
 ## Word Sense Disambiguation
 
 ::: linkingtk.algorithms.wsd
