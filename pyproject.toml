@@ -63,7 +63,7 @@ module = ["networkx.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*", "pykeen.*", "torch.*"]
+module = ["sklearn.*", "scipy.*", "pykeen.*", "torch.*", "datasets.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

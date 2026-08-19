@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "linkingtk" / "downloads"
 _LITERAL_RE = re.compile(r'^"(.*)"(?:\^\^<[^>]*>|@[a-zA-Z-]+)?$')
@@ -40,7 +40,9 @@ def parse_literal_value(raw: str) -> str:
     return match.group(1) if match else raw
 
 
-def fetch_cached(url: str, cache_dir: Path | None = None) -> bytes:
+def fetch_cached(
+    url: str, cache_dir: Path | None = None, headers: dict[str, str] | None = None
+) -> bytes:
     """Fetch ``url``'s bytes, caching to disk under ``cache_dir``.
 
     ``file://`` URLs are read directly and never cached -- they're already
@@ -51,6 +53,9 @@ def fetch_cached(url: str, cache_dir: Path | None = None) -> bytes:
         url: The URL to fetch.
         cache_dir: Directory to cache downloads in. Defaults to
             ``~/.cache/linkingtk/downloads``.
+        headers: Extra request headers, e.g. a ``User-Agent`` some hosts
+            require (Wikipedia's API 403s on urllib's default one -- see
+            [fetch_wikipedia_extracts][linkingtk.datasets.aida_conll.fetch_wikipedia_extracts]).
 
     Returns:
         The response body.
@@ -65,7 +70,7 @@ def fetch_cached(url: str, cache_dir: Path | None = None) -> bytes:
     if cache_path.exists():
         return cache_path.read_bytes()
 
-    with urlopen(url) as response:
+    with urlopen(Request(url, headers=headers or {})) as response:
         fetched: bytes = response.read()
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path.write_bytes(fetched)

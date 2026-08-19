@@ -31,3 +31,7 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 ## WordNet-Wikidata
 
 ::: linkingtk.datasets.wordnet_wikidata
+
+## AIDA-CoNLL
+
+::: linkingtk.datasets.aida_conll

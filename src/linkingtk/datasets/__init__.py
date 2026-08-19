@@ -6,6 +6,7 @@ SemCor, ...) live in dedicated modules under this package. See DESIGN.md's
 Datasets section for the full list and sources.
 """
 
+from linkingtk.datasets.aida_conll import AidaConllDataset
 from linkingtk.datasets.base import DatasetLoader, GraphDatasetLoader
 from linkingtk.datasets.dbp15k import DBP15KFrEnDataset, DBP15KJaEnDataset, DBP15KZhEnDataset
 from linkingtk.datasets.icews import IcewsWikiDataset
@@ -33,6 +34,7 @@ from linkingtk.datasets.wordnet_wikidata import (
 __all__ = [
     "DatasetLoader",
     "GraphDatasetLoader",
+    "AidaConllDataset",
     "ConferenceDataset",
     "AnatomyDataset",
     "ToyEADataset",
