@@ -74,23 +74,31 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
     multi-answer support (a prediction matching *any* of them counts as
     correct) applies -- rare overall (0.9% of SemEval-2007's instances)
     but not always (18% of SemEval-2015's).
+
+    Each mention's id is the word's own ``id`` attribute when present
+    (e.g. ``"d000.s000.t000"``, the original Raganato et al. instance id
+    -- present on the ``raganato_*.xml`` corpora, so a system's output can
+    be converted straight back to their submission format for
+    cross-checking against their own ``Scorer.java``), falling back to a
+    positional ``ufsac:{document}:{sentence}:{index}`` id for corpora that
+    don't carry one (e.g. UFSAC's own non-Raganato ``semcor.xml``).
     """
     mentions: list[Entity] = []
     ground_truth: list[tuple[str, str]] = []
     doc_id = ""
     sent_id = ""
     sent_index = 0
-    words: list[tuple[str, str, list[str]]] = []
+    words: list[tuple[str, str, list[str], str | None]] = []
 
     def flush_sentence() -> None:
-        text = " ".join(surface for surface, _lemma, _keys in words)
+        text = " ".join(surface for surface, _lemma, _keys, _id in words)
         offset = 0
-        for index, (surface, lemma, sense_keys) in enumerate(words):
+        for index, (surface, lemma, sense_keys, instance_id) in enumerate(words):
             start = offset
             end = offset + len(surface)
             offset = end + 1
             if sense_keys:
-                mention_id = f"ufsac:{doc_id}:{sent_id}:{index}"
+                mention_id = instance_id or f"ufsac:{doc_id}:{sent_id}:{index}"
                 mentions.append(Entity(id=mention_id, labels=[lemma], context=(text, start, end)))
                 ground_truth.extend((mention_id, sense_key) for sense_key in sense_keys)
         words.clear()
@@ -105,7 +113,7 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
             surface = elem.get("surface_form", "")
             lemma = elem.get("lemma", surface)
             key_attr = elem.get("wn30_key")
-            words.append((surface, lemma, key_attr.split(";") if key_attr else []))
+            words.append((surface, lemma, key_attr.split(";") if key_attr else [], elem.get("id")))
             elem.clear()
         elif event == "end" and elem.tag == "sentence":
             flush_sentence()

@@ -9,6 +9,18 @@ from linkingtk.core.entity import Entity, label_texts
 from linkingtk.core.source import EntitySource
 
 
+def _normalize(text: str) -> str:
+    """Lowercase, underscore/space-insensitive form used only for the
+    ``EntitySource`` post-filter comparison (never for the query sent to
+    ``search()`` itself). Multi-word lemmas are joined with underscores in
+    the classic WordNet distribution format but indexed space-separated by
+    some `wn` lexicons (e.g. OMW's ``omw-en:1.4``/``omw-en:2.0`` -- see
+    [sources.wn][linkingtk.sources.wn]'s own underscore/space fallback for
+    the query side of this same mismatch).
+    """
+    return text.lower().replace("_", " ")
+
+
 class ExactMatch(BlockingStrategy):
     """Blocks entities that share at least one identical label.
 
@@ -65,15 +77,17 @@ class ExactMatch(BlockingStrategy):
         for entity1 in dataset1:
             seen: set[str] = set()
             for text in set(label_texts(entity1)):
-                # Case-insensitive on this side only: an EntitySource's own
-                # search() may itself be case-insensitive (e.g. `wn`'s --
-                # querying "friday" finds the synset WordNet itself lemmatizes
-                # as "Friday"), so a case-sensitive post-filter here would
-                # silently drop real matches search() already found.
+                # Normalized (case- and underscore/space-insensitive) on this
+                # side only: an EntitySource's own search() may itself be
+                # looser than exact string equality (e.g. `wn`'s -- querying
+                # "friday" finds the synset WordNet lemmatizes as "Friday",
+                # and "point_out" finds "point out"), so a stricter
+                # post-filter here would silently drop real matches
+                # search() already found.
                 for entity2 in dataset2.search(text, top_k=self.top_k):
                     if entity2.id in seen:
                         continue
-                    if text.lower() in {t.lower() for t in label_texts(entity2)}:
+                    if _normalize(text) in {_normalize(t) for t in label_texts(entity2)}:
                         pairs.append((entity1, entity2))
                         seen.add(entity2.id)
         return pairs

@@ -77,6 +77,25 @@ class TestEntitySource:
 
         assert ExactMatch().candidate_pairs(dataset1, _LooseSource()) == []
 
+    def test_underscore_query_matches_space_separated_search_result(self) -> None:
+        # A source's search() may itself be underscore/space-insensitive
+        # (e.g. `wn`'s omw-en lexicons index phrasal verbs space-separated
+        # even though queries commonly use the classic underscore-joined
+        # form, so a query for "point_out" finds a "point out" result) --
+        # the post-filter shouldn't be stricter than that.
+        dataset1 = [Entity(id="a1", labels=["point_out"])]
+
+        class _UnderscoreInsensitiveSource(EntitySource):
+            def search(self, query: str, top_k: int = 10) -> list[Entity]:
+                return [Entity(id="b1", labels=["point out"])]
+
+            def get(self, entity_id: str) -> Entity | None:
+                return None
+
+        pairs = ExactMatch().candidate_pairs(dataset1, _UnderscoreInsensitiveSource())
+
+        assert [(e1.id, e2.id) for e1, e2 in pairs] == [("a1", "b1")]
+
     def test_deduplicates_pairs_from_source(self) -> None:
         dataset1 = [Entity(id="a1", labels=["cat", "kitty"])]
         source = _FakeSource([Entity(id="b1", labels=["cat", "kitty"])])

@@ -101,6 +101,19 @@ class TestLoad:
         mention_id = "ufsac:d001:s1:1"
         assert gt_by_mention[mention_id] == "omw-en-00031264-n"
 
+    def test_uses_the_words_own_id_attribute_when_present(self, tmp_path: Path) -> None:
+        xml = _XML.replace(
+            'wn30_key="group%1:03:00::"', 'wn30_key="group%1:03:00::" id="d001.s001.t000"'
+        )
+        path = tmp_path / "corpus.xml"
+        path.write_text(xml)
+
+        mentions, _senses, ground_truth = UfsacDataset(source=str(path)).load()
+
+        group_mention = next(m for m in mentions if m.labels == ["group"])
+        assert group_mention.id == "d001.s001.t000"
+        assert dict(ground_truth)["d001.s001.t000"] == "omw-en-00031264-n"
+
     def test_multiple_wn30_keys_become_separate_ground_truth_rows(self, tmp_path: Path) -> None:
         # Some gold-standard instances genuinely accept more than one
         # correct sense key (";"-joined) -- not a compound-word artifact.

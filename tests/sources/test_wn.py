@@ -5,7 +5,12 @@ import types
 
 import pytest
 
-from linkingtk.sources.wn import WnEntitySource, sensekey_to_synset_id
+from linkingtk.sources.wn import (
+    WnEntitySource,
+    _adjective_satellite_variant,
+    sensekey_to_synset_id,
+    synset_id_to_sensekey,
+)
 
 
 class _FakeWnError(Exception):
@@ -143,6 +148,37 @@ class TestSearch:
 
         assert results[1].labels == [("bank", "en"), ("riverbank", "en")]
 
+    def test_underscore_query_falls_back_to_space_separated(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Some lexicons (e.g. OMW's omw-en) index multi-word lemmas
+        # space-separated ("point out") even though the classic WordNet
+        # sense-key format joins them with underscores ("point_out").
+        point_out = _FakeSynset(
+            id="omw-en-x-v", words=[_FakeWord("point out", "en")], definition=None
+        )
+        module = _fake_wn_module(synsets_by_query={"point out": [point_out]}, synsets_by_id={})
+        monkeypatch.setitem(sys.modules, "wn", module)
+        source = WnEntitySource(lang="en")
+
+        results = source.search("point_out")
+
+        assert [e.id for e in results] == ["omw-en-x-v"]
+
+    def test_underscore_query_not_retried_when_first_query_succeeds(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        underscore_form = _FakeSynset(id="x", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={"point_out": [underscore_form]}, synsets_by_id={}
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+        source = WnEntitySource(lang="en")
+
+        results = source.search("point_out")
+
+        assert [e.id for e in results] == ["x"]
+
 
 class TestGet:
     def test_returns_matching_entity(self, fake_wn: types.ModuleType) -> None:
@@ -194,3 +230,98 @@ class TestSensekeyToSynsetId:
         monkeypatch.setitem(sys.modules, "wn", module)
 
         assert sensekey_to_synset_id("nonexistent%1:03:00::") is None
+
+    def test_underscore_lemma_falls_back_to_space_separated(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        point_out = _FakeSynset(id="omw-en-x-v", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"point out": [_FakeSense("point_out%2:32:01::", point_out)]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert sensekey_to_synset_id("point_out%2:32:01::") == "omw-en-x-v"
+
+    def test_adjective_satellite_variant_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # UFSAC's wn30_key tags "peculiar" (meaning "specific") as type 3
+        # (plain adjective); omw-en:1.4 stores the identical sense as type
+        # 5 (adjective satellite) instead.
+        peculiar = _FakeSynset(id="omw-en-x-s", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"peculiar": [_FakeSense("peculiar%5:00:00:specific:00", peculiar)]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert sensekey_to_synset_id("peculiar%3:00:00:specific:00") == "omw-en-x-s"
+
+
+class TestAdjectiveSatelliteVariant:
+    def test_swaps_type_3_to_5(self) -> None:
+        assert _adjective_satellite_variant("peculiar%3:00:00:specific:00") == (
+            "peculiar%5:00:00:specific:00"
+        )
+
+    def test_swaps_type_5_to_3(self) -> None:
+        assert _adjective_satellite_variant("peculiar%5:00:00:specific:00") == (
+            "peculiar%3:00:00:specific:00"
+        )
+
+    def test_non_adjective_type_returns_none(self) -> None:
+        assert _adjective_satellite_variant("group%1:03:00::") is None
+
+    def test_no_percent_sign_returns_none(self) -> None:
+        assert _adjective_satellite_variant("nonsense") is None
+
+
+class TestSynsetIdToSensekey:
+    def test_matches_by_synset_id_and_lemma(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        group_top = _FakeSynset(id="omw-en-00031264-n", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"group": [_FakeSense("group%1:03:00::", group_top)]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert synset_id_to_sensekey("omw-en-00031264-n", "group") == "group%1:03:00::"
+
+    def test_no_matching_synset_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        group_top = _FakeSynset(id="omw-en-00031264-n", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"group": [_FakeSense("group%1:03:00::", group_top)]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert synset_id_to_sensekey("omw-en-99999999-n", "group") is None
+
+    def test_underscore_lemma_falls_back_to_space_separated(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        point_out = _FakeSynset(id="omw-en-x-v", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"point out": [_FakeSense("point_out%2:32:01::", point_out)]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert synset_id_to_sensekey("omw-en-x-v", "point_out") == "point_out%2:32:01::"
+
+    def test_round_trips_with_sensekey_to_synset_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        group_top = _FakeSynset(id="omw-en-00031264-n", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"group": [_FakeSense("group%1:03:00::", group_top)]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        synset_id = sensekey_to_synset_id("group%1:03:00::")
+        assert synset_id is not None
+        assert synset_id_to_sensekey(synset_id, "group") == "group%1:03:00::"
