@@ -8,6 +8,7 @@ from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.source import EntitySource
 from linkingtk.utils.graph import Graph
 
 DEFAULT_BLOCKING = ExactMatch()
@@ -26,7 +27,7 @@ class BaseLinker(ABC):
     def link(
         self,
         dataset1: list[Entity],
-        dataset2: list[Entity],
+        dataset2: list[Entity] | EntitySource,
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:
@@ -34,7 +35,11 @@ class BaseLinker(ABC):
 
         Args:
             dataset1: Source entities (e.g. mentions, source KG entities).
-            dataset2: Target entities (e.g. KB entries, target KG entities).
+            dataset2: Target entities (e.g. KB entries, target KG entities),
+                or an [EntitySource][linkingtk.core.source.EntitySource]
+                wrapping a target too large to materialize as a
+                ``list[Entity]``. Support depends on ``blocking`` -- see
+                [candidate_pairs][linkingtk.blocking.base.BlockingStrategy.candidate_pairs].
             graph: Optional supporting graph as a triple list, a
                 ``networkx.Graph``, or an ``rdflib.Graph``.
             blocking: Strategy used to generate candidate pairs before

@@ -67,6 +67,17 @@ def test_evaluate_blocking_pair_completeness_and_reduction_ratio() -> None:
     assert report.metrics["reduction_ratio"] == 1 - 3 / 12
 
 
+def test_evaluate_blocking_without_dataset2_size_omits_reduction_ratio() -> None:
+    report = Evaluator.evaluate_blocking(
+        candidate_pairs=[("s1", "t1"), ("s2", "t2")],
+        ground_truth=[("s1", "t1"), ("s2", "t2"), ("s3", "t4")],
+        dataset1_size=3,
+        dataset2_size=None,
+    )
+    assert report.metrics["reduction_ratio"] is None
+    assert report.metrics["pair_completeness"] == 2 / 3
+
+
 def test_evaluate_blocking_empty_ground_truth_and_no_candidates() -> None:
     report = Evaluator.evaluate_blocking(
         candidate_pairs=[],

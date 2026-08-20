@@ -22,6 +22,7 @@ from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.trie import edit_distance
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.source import EntitySource
 from linkingtk.core.text import Field, resolve_field, tokenize
 from linkingtk.utils.graph import Graph
 
@@ -108,7 +109,7 @@ class StringSimilarityLinker(BaseLinker):
     def link(
         self,
         dataset1: list[Entity],
-        dataset2: list[Entity],
+        dataset2: list[Entity] | EntitySource,
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:
@@ -120,12 +121,16 @@ class StringSimilarityLinker(BaseLinker):
 
         # Extract each entity's comparison text once, rather than
         # re-extracting (and, for token-based metrics, re-tokenizing) it
-        # for every candidate pair it appears in.
+        # for every candidate pair it appears in. Target texts are cached
+        # lazily from the pairs themselves (rather than a pre-pass over
+        # dataset2) so this also works when dataset2 is an EntitySource.
         source_texts = {entity.id: extract_source(entity) for entity in dataset1}
-        target_texts = {entity.id: extract_target(entity) for entity in dataset2}
+        target_texts: dict[str, str] = {}
 
         candidates_by_source: dict[str, list[tuple[str, float]]] = defaultdict(list)
         for entity1, entity2 in pairs:
+            if entity2.id not in target_texts:
+                target_texts[entity2.id] = extract_target(entity2)
             candidates_by_source[entity1.id].append(
                 (entity2.id, score(source_texts[entity1.id], target_texts[entity2.id]))
             )

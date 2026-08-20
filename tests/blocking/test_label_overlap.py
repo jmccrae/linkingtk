@@ -2,6 +2,7 @@ import pytest
 
 from linkingtk.blocking.label_overlap import LabelOverlap
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 
 
 def _entities(*labels: str) -> list[Entity]:
@@ -105,3 +106,18 @@ class TestLevenshteinMetric:
 
 def test_label_overlap_is_ranked() -> None:
     assert LabelOverlap.ranked is True
+
+
+class _EmptySource(EntitySource):
+    def search(self, query: str, top_k: int = 10) -> list[Entity]:
+        return []
+
+    def get(self, entity_id: str) -> Entity | None:
+        return None
+
+
+def test_label_overlap_rejects_entity_source() -> None:
+    dataset1 = _entities("cat")
+
+    with pytest.raises(TypeError, match="EntitySource"):
+        LabelOverlap().candidate_pairs(dataset1, _EmptySource())

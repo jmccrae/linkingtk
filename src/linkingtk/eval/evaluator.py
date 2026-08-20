@@ -80,7 +80,7 @@ class Evaluator:
                 reciprocal_ranks.append(0.0)
 
         total = len(ground_truth) or 1
-        metrics = {f"Hits@{k}": hits[k] / total for k in top_k}
+        metrics: dict[str, float | None] = {f"Hits@{k}": hits[k] / total for k in top_k}
         metrics["MRR"] = sum(reciprocal_ranks) / total
         return EvaluationReport(metrics=metrics)
 
@@ -89,7 +89,7 @@ class Evaluator:
         candidate_pairs: list[tuple[str, str]],
         ground_truth: list[tuple[str, str]],
         dataset1_size: int,
-        dataset2_size: int,
+        dataset2_size: int | None = None,
     ) -> EvaluationReport:
         """Compute Pair Completeness and Reduction Ratio for a blocking pass.
 
@@ -102,20 +102,26 @@ class Evaluator:
             ground_truth: List of ``(source_id, target_id)`` true matching
                 pairs.
             dataset1_size: Number of entities in the first dataset.
-            dataset2_size: Number of entities in the second dataset.
+            dataset2_size: Number of entities in the second dataset, or
+                ``None`` if unknown -- e.g. blocking targeted an
+                [EntitySource][linkingtk.core.source.EntitySource] with no
+                fixed size. ``reduction_ratio`` is then not computable.
 
         Returns:
             A report containing ``pair_completeness`` (the fraction of true
             matches present among the candidate pairs, i.e. blocking recall)
             and ``reduction_ratio`` (the fraction of the full ``dataset1_size
-            * dataset2_size`` cross-product eliminated by blocking).
+            * dataset2_size`` cross-product eliminated by blocking, or
+            ``None`` if ``dataset2_size`` wasn't given).
         """
         candidate_set = set(candidate_pairs)
         true_positives = sum(1 for pair in ground_truth if pair in candidate_set)
         pair_completeness = true_positives / len(ground_truth) if ground_truth else 0.0
 
-        total_possible = dataset1_size * dataset2_size
-        reduction_ratio = 1 - len(candidate_pairs) / total_possible if total_possible else 0.0
+        reduction_ratio: float | None = None
+        if dataset2_size is not None:
+            total_possible = dataset1_size * dataset2_size
+            reduction_ratio = 1 - len(candidate_pairs) / total_possible if total_possible else 0.0
         return EvaluationReport(
             metrics={"pair_completeness": pair_completeness, "reduction_ratio": reduction_ratio}
         )

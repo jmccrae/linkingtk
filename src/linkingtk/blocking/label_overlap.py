@@ -28,6 +28,7 @@ from typing import Literal
 from linkingtk.blocking.base import BlockingStrategy, rank_top_matches
 from linkingtk.blocking.trie import PatriciaTrie
 from linkingtk.core.entity import Entity, label_texts
+from linkingtk.core.source import EntitySource
 
 logger = logging.getLogger("linkingtk")
 
@@ -99,8 +100,14 @@ class LabelOverlap(BlockingStrategy):
         self.max_ngram_document_frequency = max_ngram_document_frequency
 
     def candidate_pairs(
-        self, dataset1: list[Entity], dataset2: list[Entity]
+        self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
     ) -> list[tuple[Entity, Entity]]:
+        if isinstance(dataset2, EntitySource):
+            raise TypeError(
+                "LabelOverlap requires a fully materialized list[Entity] for dataset2 "
+                "-- it builds an n-gram/trie index over the whole target set up front, "
+                "which an EntitySource exists specifically to avoid. Not supported yet."
+            )
         entities2_by_id = {entity.id: entity for entity in dataset2}
         if self.metric == "ngram":
             return self._ngram_candidate_pairs(dataset1, dataset2, entities2_by_id)

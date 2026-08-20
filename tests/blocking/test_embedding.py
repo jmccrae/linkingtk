@@ -4,6 +4,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from linkingtk.blocking.embedding import EmbeddingSimilarityBlocker
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 
 
 def _entities(*descriptions: str) -> list[Entity]:
@@ -116,3 +117,18 @@ def test_custom_vectorizer_returning_dense_array_is_supported() -> None:
 
 def test_embedding_similarity_blocker_is_ranked() -> None:
     assert EmbeddingSimilarityBlocker.ranked is True
+
+
+class _EmptySource(EntitySource):
+    def search(self, query: str, top_k: int = 10) -> list[Entity]:
+        return []
+
+    def get(self, entity_id: str) -> Entity | None:
+        return None
+
+
+def test_embedding_similarity_blocker_rejects_entity_source() -> None:
+    dataset1 = _entities("a small rodent")
+
+    with pytest.raises(TypeError, match="EntitySource"):
+        EmbeddingSimilarityBlocker(field="description").candidate_pairs(dataset1, _EmptySource())

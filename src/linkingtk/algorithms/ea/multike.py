@@ -172,6 +172,7 @@ from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity, label_texts
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.source import EntitySource
 from linkingtk.datasets._util import label_from_raw
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
 from linkingtk.utils.device import resolve_device
@@ -725,7 +726,7 @@ class MultiKELinker(BaseLinker):
     def link(
         self,
         dataset1: list[Entity],
-        dataset2: list[Entity],
+        dataset2: list[Entity] | EntitySource,
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:

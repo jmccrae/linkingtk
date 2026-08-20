@@ -19,13 +19,14 @@ from collections import defaultdict
 
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 
 logger = logging.getLogger("linkingtk")
 
 
 def sample_hard_negatives(
     dataset1: list[Entity],
-    dataset2: list[Entity],
+    dataset2: list[Entity] | EntitySource,
     ground_truth: list[tuple[str, str]],
     blocking: BlockingStrategy,
     top_k: int = 5,

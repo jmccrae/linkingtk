@@ -32,6 +32,7 @@ from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.embedding import Vectorizer
 from linkingtk.core.entity import Entity, description_text
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.source import EntitySource
 from linkingtk.core.text import Field, resolve_field
 from linkingtk.exceptions import LinkingTKError
 from linkingtk.utils.graph import Graph
@@ -186,7 +187,7 @@ class FeatureClassifierLinker(BaseLinker):
                 ``negatives`` is empty (given explicitly, or after
                 sampling) — a classifier can't train on a single class.
         """
-        candidates = blocking.candidate_pairs(dataset1, dataset2)
+        candidates = list(blocking.candidate_pairs(dataset1, dataset2))
         ground_truth_set = set(ground_truth)
         positives = [(e1, e2) for e1, e2 in candidates if (e1.id, e2.id) in ground_truth_set]
         if not positives:
@@ -218,14 +219,20 @@ class FeatureClassifierLinker(BaseLinker):
     def link(
         self,
         dataset1: list[Entity],
-        dataset2: list[Entity],
+        dataset2: list[Entity] | EntitySource,
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:
         if not self._fitted:
             raise LinkingTKError("FeatureClassifierLinker.link() called before fit().")
+        if isinstance(dataset2, EntitySource):
+            raise TypeError(
+                "FeatureClassifierLinker requires a fully materialized list[Entity] for "
+                "dataset2 -- it fits/transforms a TF-IDF vectorizer over the whole target "
+                "set, which an EntitySource exists specifically to avoid. Not supported yet."
+            )
 
-        pairs = blocking.candidate_pairs(dataset1, dataset2)
+        pairs = list(blocking.candidate_pairs(dataset1, dataset2))
         if not pairs:
             return []
 

@@ -18,6 +18,7 @@ from sklearn.neighbors import NearestNeighbors
 
 from linkingtk.blocking.base import BlockingStrategy, rank_top_matches
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 from linkingtk.core.text import Field, resolve_field
 
 
@@ -82,8 +83,15 @@ class EmbeddingSimilarityBlocker(BlockingStrategy):
         )
 
     def candidate_pairs(
-        self, dataset1: list[Entity], dataset2: list[Entity]
+        self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
     ) -> list[tuple[Entity, Entity]]:
+        if isinstance(dataset2, EntitySource):
+            raise TypeError(
+                "EmbeddingSimilarityBlocker requires a fully materialized list[Entity] "
+                "for dataset2 -- it fits a vectorizer over the whole target set up "
+                "front, which an EntitySource exists specifically to avoid. Not "
+                "supported yet."
+            )
         if not dataset1 or not dataset2:
             return []
 

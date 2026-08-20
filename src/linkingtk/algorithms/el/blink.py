@@ -34,6 +34,7 @@ from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity, description_text, label_texts
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.source import EntitySource
 from linkingtk.utils.graph import Graph
 
 _MENTION_START = "[Ms]"
@@ -242,7 +243,7 @@ class BlinkLinker(BaseLinker):
     def link(
         self,
         dataset1: list[Entity],
-        dataset2: list[Entity],
+        dataset2: list[Entity] | EntitySource,
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:

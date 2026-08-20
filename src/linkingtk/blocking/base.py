@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable
 from typing import ClassVar
 
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 
 
 class BlockingStrategy(ABC):
@@ -30,18 +31,25 @@ class BlockingStrategy(ABC):
 
     @abstractmethod
     def candidate_pairs(
-        self, dataset1: list[Entity], dataset2: list[Entity]
-    ) -> list[tuple[Entity, Entity]]:
+        self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
+    ) -> Iterable[tuple[Entity, Entity]]:
         """Return candidate entity pairs to be scored by a linker.
 
         Args:
             dataset1: Entities from the first dataset.
-            dataset2: Entities from the second dataset.
+            dataset2: Entities from the second dataset, or an
+                [EntitySource][linkingtk.core.source.EntitySource] wrapping a
+                target too large to materialize as a ``list[Entity]``. Not
+                every strategy supports an ``EntitySource`` -- one that needs
+                to enumerate the whole target set to build an index (e.g.
+                [LabelOverlap][linkingtk.blocking.label_overlap.LabelOverlap],
+                [EmbeddingSimilarityBlocker][linkingtk.blocking.embedding.EmbeddingSimilarityBlocker])
+                raises ``TypeError`` instead.
 
         Returns:
-            A list of candidate ``(entity1, entity2)`` pairs. Where a
-            strategy has a graded notion of relevance, a given source
-            entity's own candidates should appear best-first (see
+            Candidate ``(entity1, entity2)`` pairs. Where a strategy has a
+            graded notion of relevance, a given source entity's own
+            candidates should appear best-first (see
             [ranked][linkingtk.blocking.base.BlockingStrategy.ranked]) — consumers such as
             [sample_hard_negatives][linkingtk.blocking.negative_sampling.sample_hard_negatives]
             rely on this ordering.

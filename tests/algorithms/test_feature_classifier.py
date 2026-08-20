@@ -4,7 +4,9 @@ from linkingtk.algorithms.feature_classifier import DEFAULT_FEATURES, FeatureCla
 from linkingtk.algorithms.matching import OptimalMatcher
 from linkingtk.blocking import LabelOverlap, sample_hard_negatives
 from linkingtk.blocking.base import BlockingStrategy
+from linkingtk.blocking.exact import ExactMatch
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 from linkingtk.datasets.toy import ToyEADataset, ToyWSADataset
 from linkingtk.eval import Evaluator
 from linkingtk.exceptions import LinkingTKError
@@ -151,6 +153,24 @@ class TestGuards:
         # true match on this dataset (no false candidates at all).
         with pytest.raises(LinkingTKError):
             linker.fit(kg1, kg2, ground_truth, blocking=LabelOverlap(max_matches=3))
+
+    def test_link_rejects_entity_source(self) -> None:
+        kg1, kg2, ground_truth = ToyEADataset().load()
+        linker = FeatureClassifierLinker().fit(
+            kg1, kg2, ground_truth, blocking=_blocking(), random_state=0
+        )
+
+        class _EmptySource(EntitySource):
+            def search(self, query: str, top_k: int = 10) -> list[Entity]:
+                return []
+
+            def get(self, entity_id: str) -> Entity | None:
+                return None
+
+        # ExactMatch itself supports an EntitySource; the TypeError here
+        # must come from FeatureClassifierLinker's own guard.
+        with pytest.raises(TypeError, match="EntitySource"):
+            linker.link(kg1, _EmptySource(), blocking=ExactMatch())
 
 
 class TestEmptyVocabularyGuard:

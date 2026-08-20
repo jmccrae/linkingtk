@@ -168,6 +168,7 @@ from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
+from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
 from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, Triple, build_id_mappings, map_triples_to_ids, to_triples
@@ -688,7 +689,7 @@ class KDCoELinker(BaseLinker):
     def link(
         self,
         dataset1: list[Entity],
-        dataset2: list[Entity],
+        dataset2: list[Entity] | EntitySource,
         graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> list[AlignmentResult]:

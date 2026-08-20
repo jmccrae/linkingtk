@@ -4,6 +4,7 @@ from linkingtk.algorithms.wsd import LeskLinker
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 
 
 class _AllPairs(BlockingStrategy):
@@ -13,6 +14,43 @@ class _AllPairs(BlockingStrategy):
         self, dataset1: list[Entity], dataset2: list[Entity]
     ) -> list[tuple[Entity, Entity]]:
         return [(e1, e2) for e1 in dataset1 for e2 in dataset2]
+
+
+class _FakeSource(EntitySource):
+    """In-memory EntitySource backed by a small dict, no network/library dependency."""
+
+    def __init__(self, entities: list[Entity]) -> None:
+        self._entities = entities
+
+    def search(self, query: str, top_k: int = 10) -> list[Entity]:
+        matches = [entity for entity in self._entities if query in entity.labels]
+        return matches[:top_k]
+
+    def get(self, entity_id: str) -> Entity | None:
+        for entity in self._entities:
+            if entity.id == entity_id:
+                return entity
+        return None
+
+
+class TestEntitySourceEndToEnd:
+    def test_links_against_an_entity_source_via_exact_match(self) -> None:
+        dataset1 = [Entity(id="e1", labels=["big cat"])]
+        source = _FakeSource(
+            [
+                Entity(id="t1", labels=["big cat"]),
+                Entity(id="t2", labels=["small dog"]),
+            ]
+        )
+
+        linker = StringSimilarityLinker(
+            source_field="label", target_field="label", metric="jaccard"
+        )
+        results = linker.link(dataset1, source, blocking=ExactMatch())
+
+        assert len(results) == 1
+        assert results[0].target_id == "t1"
+        assert results[0].score == 1.0
 
 
 class TestFieldsAndMetrics:
