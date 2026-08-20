@@ -154,6 +154,9 @@ class CrossEncoderTrainer:
             self.model, args, num_batches_per_epoch * args.num_epochs
         )
 
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         for _ in range(args.num_epochs):
             shuffled = list(examples)
             random.shuffle(shuffled)
@@ -172,8 +175,10 @@ class CrossEncoderTrainer:
             if self.eval_data is not None:
                 self.eval_history.append(self._evaluate())
 
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        torch.save(self.model.state_dict(), Path(args.output_dir) / "model.pt")
+            # Saved after *every* epoch, not just at the end -- a long run
+            # (e.g. full-corpus WSD training) can span hours unattended;
+            # without this, an interruption on epoch 5 of 6 loses everything.
+            torch.save(self.model.state_dict(), output_dir / "model.pt")
 
     def _evaluate(self) -> EvaluationReport:
         assert self.eval_data is not None  # only called when eval_data is set

@@ -198,6 +198,23 @@ class TestCheckpoint:
 
         assert (tmp_path / "model" / "model.pt").exists()
 
+    def test_saves_after_every_epoch_not_just_at_the_end(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A long unattended run can be interrupted mid-training -- the
+        # checkpoint must be refreshed every epoch, not only once train()
+        # fully returns, or an interruption loses all prior progress.
+        trainer, _model = _make_trainer(output_dir=tmp_path / "model", num_epochs=5)
+        save_calls = []
+        real_save = torch.save
+        monkeypatch.setattr(
+            torch, "save", lambda obj, path: (save_calls.append(path), real_save(obj, path))
+        )
+
+        trainer.train()
+
+        assert len(save_calls) == 5
+
 
 class TestPeft:
     def test_use_peft_without_config_raises(self, tmp_path: Path) -> None:
