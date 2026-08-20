@@ -35,35 +35,32 @@ uv run python examples/glossbert_reproduction.py
 
 ```text
 dataset   precision@1  published
-SE07            72.6%      72.1%
-SE2             76.5%      77.7%
-SE3             75.2%      75.9%
-SE13            74.9%      76.8%
-SE15            71.8%      79.3%
-ALL             74.9%      77.2%
+SE07            72.9%      72.1%
+SE2             78.4%      77.7%
+SE3             76.1%      75.9%
+SE13            75.1%      76.8%
+SE15            78.8%      79.3%
+ALL             76.8%      77.2%
 ```
 
-**SE07 (the paper's own dev set) essentially matches exactly; ALL lands
-2.3 points under the published 77.2.** As with every other real-data
-benchmark in this repo, that first number wasn't accepted as-is --
-concrete diagnostics found and fixed two real bugs before landing here:
+**Every dataset lands within ~0.5-1.7 points of its published number, ALL
+within 0.4.** Getting here took three rounds of real diagnosis, not
+accepting the first (or second) number as-is:
 
 **Bug 1 — mentions were labeled by surface form, not lemma.**
 [`UfsacDataset`](../reference/datasets.md) originally set each mention's
 `labels` to its literal surface text (e.g. `"caught"`). Candidate
 generation (`ExactMatch` querying `WnEntitySource` by label) needs the
-dictionary lemma (`"catch"`) — WordNet doesn't index inflected forms.
-The first real run measured precision@1 = 52.6% on SE07 with **recall well
+dictionary lemma (`"catch"`) — WordNet doesn't index inflected forms. The
+first real run measured precision@1 = 52.6% on SE07 with **recall well
 below precision** (35.4%), the tell that a third of mentions were
-producing *no* candidates at all, not just a wrong one. Fixed by using
-each word's `lemma` attribute for `labels` (both
-[`UfsacDataset`](../reference/datasets.md) and
-[`SemCorDataset`](../reference/datasets.md) had this bug), while keeping
-the literal surface form available from `context`'s span for
+producing *no* candidates at all. Fixed by using each word's `lemma`
+attribute for `labels` (both [`UfsacDataset`](../reference/datasets.md)
+and [`SemCorDataset`](../reference/datasets.md) had this bug), keeping the
+literal surface form available from `context`'s span for
 [`_gloss_text`](../reference/algorithms.md)'s formatting, which needs it
-(GlossBERT's own gloss side is `"<surface form> : <gloss>"`, not the
-lemma). This alone brought SE07 to 72.4%, already within 0.3 points of
-the published 72.1%.
+instead (GlossBERT's gloss side is `"<surface form> : <gloss>"`, not the
+lemma). This alone brought SE07 to 72.4%.
 
 **Bug 2 — case-sensitive post-filtering dropped `wn`'s own
 case-insensitive matches.** [`ExactMatch`](../reference/blocking.md)'s
@@ -71,24 +68,40 @@ case-insensitive matches.** [`ExactMatch`](../reference/blocking.md)'s
 carries the queried label, to guard against a loosely-matching search
 implementation. But `wn.synsets("friday")` is itself case-insensitive --
 it finds the synset WordNet lemmatizes as `"Friday"` -- so the
-case-sensitive post-filter (`"friday" in {"Friday"}` → `False`) silently
-dropped it, and every other capitalized/proper-noun-like lemma
-(`"washington"`, `"european"`, `"dna"`, `"3d"`, ...). Measured directly:
-85 of 1516 SemEval-2013 mentions (5.6%) had *zero* candidates before this
-fix, 15 of 929 SemEval-2015 mentions after the lemma fix alone. Made the
-post-filter's comparison case-insensitive; every eval set's zero-candidate
-count is now confirmed at 0, and the gold sense is confirmed present in
-the candidate set for **100% of mentions across every one of the 6 eval
-files** (verified directly, not assumed).
+case-sensitive post-filter silently dropped it, and every other
+capitalized/proper-noun-like lemma (`"washington"`, `"european"`,
+`"dna"`, ...). Measured directly: 85 of 1516 SemEval-2013 mentions had
+*zero* candidates before this fix. Made the post-filter case-insensitive;
+confirmed the gold sense present in the candidate set for 100% of
+mentions across every eval file afterward.
 
-**Remaining ~2.3-point gap on ALL, not chased further: with candidate
-coverage confirmed complete, this is the model choosing a wrong candidate
-from a correct, complete candidate set** — genuine WSD difficulty (often
-between very fine-grained, near-synonymous WordNet senses — e.g. "have
-need of" vs. "have or feel a need for" for *need*), not a further
-pipeline defect. SemEval-2015's larger gap (71.8% vs. 79.3%) tracks with
-its biomedical-domain text (European Public Assessment Reports), a
-plausible source of extra difficulty without domain adaptation, and the
-published table's own per-dataset spread (72.1 to 80.4 points for the
-original run) already shows this checkpoint is not uniformly accurate
-across domains to begin with.
+That still left SE15 at 71.3% against a published 79.3% — an 8-point gap
+big enough to be suspicious, especially once candidate coverage was
+already confirmed complete. Checked and ruled out GPU/numerical precision
+directly rather than assumed innocent: running the same evaluation on
+CPU (full fp32) and on GPU with TF32 disabled produced **bit-identical
+predictions** to the default run, so the gap wasn't hardware noise.
+
+**Bug 3 — single-answer scoring on multi-answer gold data.** Some
+WSD gold-standard instances genuinely accept more than one correct sense
+key. `UfsacDataset` kept only the first of a `;`-joined `wn30_key`, and
+[`Evaluator.evaluate`](../reference/eval.md) only ever checked a
+prediction against one ground-truth target per source. Checking how often
+this actually applies was the key diagnostic:
+
+| dataset | multi-answer instances |
+| --- | --- |
+| SemEval-2007 | 4 / 455 (0.9%) |
+| SemEval-2013 | 12 / 1644 (0.7%) |
+| SemEval-2015 | **184 / 1022 (18%)** |
+
+SemEval-2015's multi-answer rate is 20x SemEval-2007's — and it's exactly
+the dataset with the disproportionately large gap. Fixed by having
+`UfsacDataset` emit one `ground_truth` row per valid sense key (not just
+the first) and `Evaluator.evaluate` accept a match against *any* of a
+source's ground-truth rows (with the recall denominator now the number of
+distinct sources, not the row count — a strict generalization that
+doesn't change behavior for any single-answer caller, which is every
+other one in this repo). SE15 jumped from 71.3% to 78.8% — the dominant
+explanation for the whole gap, exactly where the multi-answer rate said
+to look.

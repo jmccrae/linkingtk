@@ -44,7 +44,10 @@ class _FakeSense:
 
 _SENSES_BY_LEMMA = {
     "group": [_FakeSense("group%1:03:00::", "omw-en-00031264-n")],
-    "meet": [_FakeSense("meet%2:41:00::", "omw-en-01234567-v")],
+    "meet": [
+        _FakeSense("meet%2:41:00::", "omw-en-01234567-v"),
+        _FakeSense("meet%2:41:03::", "omw-en-07654321-v"),
+    ],
 }
 
 
@@ -97,6 +100,19 @@ class TestLoad:
         gt_by_mention = dict(ground_truth)
         mention_id = "ufsac:d001:s1:1"
         assert gt_by_mention[mention_id] == "omw-en-00031264-n"
+
+    def test_multiple_wn30_keys_become_separate_ground_truth_rows(self, tmp_path: Path) -> None:
+        # Some gold-standard instances genuinely accept more than one
+        # correct sense key (";"-joined) -- not a compound-word artifact.
+        xml = _XML.replace('wn30_key="meet%2:41:00::"', 'wn30_key="meet%2:41:00::;meet%2:41:03::"')
+        path = tmp_path / "corpus.xml"
+        path.write_text(xml)
+
+        _mentions, _senses, ground_truth = UfsacDataset(source=str(path)).load()
+
+        mention_id = "ufsac:d001:s1:2"
+        targets = {target_id for mid, target_id in ground_truth if mid == mention_id}
+        assert targets == {"omw-en-01234567-v", "omw-en-07654321-v"}
 
     def test_unresolvable_sense_key_drops_the_mention(self, tmp_path: Path) -> None:
         xml = _XML.replace('wn30_key="group%1:03:00::"', 'wn30_key="group%9:99:99::"')

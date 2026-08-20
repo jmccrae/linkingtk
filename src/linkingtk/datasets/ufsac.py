@@ -65,25 +65,34 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
     ``context``'s span for anything that needs the literal text (e.g.
     [GlossBertEncoder][linkingtk.algorithms.wsd.glossbert.GlossBertEncoder]'s
     gloss-text formatting).
+
+    A ``wn30_key`` can list more than one sense key, ``;``-separated --
+    some gold-standard WSD instances genuinely accept several correct
+    answers (not a compound-word artifact). Every key becomes its own
+    ``ground_truth`` row sharing that mention's id, so
+    [Evaluator.evaluate][linkingtk.eval.evaluator.Evaluator.evaluate]'s
+    multi-answer support (a prediction matching *any* of them counts as
+    correct) applies -- rare overall (0.9% of SemEval-2007's instances)
+    but not always (18% of SemEval-2015's).
     """
     mentions: list[Entity] = []
     ground_truth: list[tuple[str, str]] = []
     doc_id = ""
     sent_id = ""
     sent_index = 0
-    words: list[tuple[str, str, str | None]] = []
+    words: list[tuple[str, str, list[str]]] = []
 
     def flush_sentence() -> None:
-        text = " ".join(surface for surface, _lemma, _key in words)
+        text = " ".join(surface for surface, _lemma, _keys in words)
         offset = 0
-        for index, (surface, lemma, sense_key) in enumerate(words):
+        for index, (surface, lemma, sense_keys) in enumerate(words):
             start = offset
             end = offset + len(surface)
             offset = end + 1
-            if sense_key is not None:
+            if sense_keys:
                 mention_id = f"ufsac:{doc_id}:{sent_id}:{index}"
                 mentions.append(Entity(id=mention_id, labels=[lemma], context=(text, start, end)))
-                ground_truth.append((mention_id, sense_key))
+                ground_truth.extend((mention_id, sense_key) for sense_key in sense_keys)
         words.clear()
 
     for event, elem in ElementTree.iterparse(BytesIO(data), events=("start", "end")):
@@ -96,7 +105,7 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
             surface = elem.get("surface_form", "")
             lemma = elem.get("lemma", surface)
             key_attr = elem.get("wn30_key")
-            words.append((surface, lemma, key_attr.split(";")[0] if key_attr else None))
+            words.append((surface, lemma, key_attr.split(";") if key_attr else []))
             elem.clear()
         elif event == "end" and elem.tag == "sentence":
             flush_sentence()

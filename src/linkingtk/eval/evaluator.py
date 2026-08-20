@@ -17,17 +17,28 @@ class Evaluator:
 
         Args:
             predictions: List of ``(source_id, predicted_target_id)`` pairs.
-            ground_truth: List of ``(source_id, target_id)`` pairs.
+            ground_truth: List of ``(source_id, target_id)`` pairs. A
+                source id may appear more than once, for tasks with
+                more than one acceptable answer per source (e.g. some
+                WSD gold-standard instances list several correct sense
+                keys) -- a prediction matching *any* of them counts as
+                correct, and the recall denominator is the number of
+                distinct source ids, not the number of ``ground_truth``
+                rows.
 
         Returns:
             A report containing ``precision@1``, ``recall`` and ``f1``.
         """
-        truth_by_source = dict(ground_truth)
+        truth_by_source: dict[str, set[str]] = {}
+        for source_id, target_id in ground_truth:
+            truth_by_source.setdefault(source_id, set()).add(target_id)
         correct = sum(
-            1 for source_id, target_id in predictions if truth_by_source.get(source_id) == target_id
+            1
+            for source_id, target_id in predictions
+            if target_id in truth_by_source.get(source_id, set())
         )
         precision = correct / len(predictions) if predictions else 0.0
-        recall = correct / len(ground_truth) if ground_truth else 0.0
+        recall = correct / len(truth_by_source) if truth_by_source else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
         return EvaluationReport(metrics={"precision@1": precision, "recall": recall, "f1": f1})
 

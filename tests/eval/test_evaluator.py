@@ -9,6 +9,22 @@ def test_evaluate_precision_recall_f1() -> None:
     assert report.metrics == {"precision@1": 0.5, "recall": 0.5, "f1": 0.5}
 
 
+def test_evaluate_accepts_any_of_multiple_valid_answers() -> None:
+    # A source id may have more than one acceptable target (e.g. some WSD
+    # gold-standard instances list several correct sense keys) -- a
+    # prediction matching any of them counts as correct, and the recall
+    # denominator is the number of distinct sources, not ground_truth rows.
+    report = Evaluator.evaluate(
+        predictions=[("e1", "e1_second_answer"), ("e2", "e2_wrong")],
+        ground_truth=[
+            ("e1", "e1_first_answer"),
+            ("e1", "e1_second_answer"),
+            ("e2", "e2_correct"),
+        ],
+    )
+    assert report.metrics == {"precision@1": 0.5, "recall": 0.5, "f1": 0.5}
+
+
 def test_evaluate_ranked_hits_and_mrr() -> None:
     report = Evaluator.evaluate_ranked(
         ranked_predictions=[
