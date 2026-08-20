@@ -29,12 +29,12 @@ corpus's 352 documents (~46MB of YAML, cached under
 `~/.cache/linkingtk/downloads/` after the first `load()` call) — not a
 toy subset — and returns one mention per sense-tagged content word, with
 `context=(sentence_text, start, end)`. `dataset2` defaults to
-``"oewn:2025"`` (not `WnEntitySource`'s own standalone default of
+``"oewn:2025+"`` (not `WnEntitySource`'s own standalone default of
 ``"oewn:2021"``), matching the release the corpus's `oewn_key` layer is
 currently generated against:
 
 ```bash
-python -m wn download oewn:2025
+python -m wn download oewn:2025+
 ```
 
 ```python
