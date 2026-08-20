@@ -11,11 +11,12 @@ here isn't a materialized `list[Entity]`: it's a
 still loads eagerly, but the candidate side is only ever queried per
 mention via [`ExactMatch`](../reference/blocking.md) blocking, exactly
 like the [`WnEntitySource` WSD example](../examples/wn_wsd.md). Requires
-the `wn` optional dependency and a one-time lexicon download:
+the `wn` optional dependency and a one-time download of whichever lexicon
+`dataset2` queries (see each section below for the right one):
 
 ```bash
 uv pip install linkingtk[wn]
-python -m wn download oewn:2021
+python -m wn download <lexicon>
 ```
 
 ## SemCor
@@ -27,7 +28,14 @@ the current Open English WordNet release. It fetches every one of the
 corpus's 352 documents (~46MB of YAML, cached under
 `~/.cache/linkingtk/downloads/` after the first `load()` call) — not a
 toy subset — and returns one mention per sense-tagged content word, with
-`context=(sentence_text, start, end)`:
+`context=(sentence_text, start, end)`. `dataset2` defaults to
+``"oewn:2025"`` (not `WnEntitySource`'s own standalone default of
+``"oewn:2021"``), matching the release the corpus's `oewn_key` layer is
+currently generated against:
+
+```bash
+python -m wn download oewn:2025
+```
 
 ```python
 from linkingtk.datasets import SemCorDataset

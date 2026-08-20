@@ -109,8 +109,11 @@ class SemCorDataset(DatasetLoader):
         cache_dir: Override for the download cache directory.
         lexicon: The `wn` lexicon `dataset2` queries -- must match the
             WordNet release this corpus's ``oewn_key`` layer is aligned
-            to (the corpus tracks the *current* Open English WordNet
-            release, so this should track it too).
+            to. Defaults to ``"oewn:2025"`` since the corpus tracks the
+            *current* Open English WordNet release, not the one
+            [WnEntitySource][linkingtk.sources.wn.WnEntitySource] itself
+            defaults to standalone -- bump this if a newer release ships
+            and the corpus's `oewn_key` layer is regenerated against it.
     """
 
     def __init__(
@@ -119,7 +122,7 @@ class SemCorDataset(DatasetLoader):
         ref: str = _REF,
         categories: list[str] | None = None,
         cache_dir: Path | None = None,
-        lexicon: str = "oewn:2021",
+        lexicon: str = "oewn:2025",
     ) -> None:
         self.source = source
         self.ref = ref
