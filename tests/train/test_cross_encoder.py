@@ -21,6 +21,7 @@ from torch import nn  # noqa: E402
 
 from linkingtk.blocking.exact import ExactMatch  # noqa: E402
 from linkingtk.core.entity import Entity  # noqa: E402
+from linkingtk.core.source import EntitySource  # noqa: E402
 from linkingtk.exceptions import LinkingTKError  # noqa: E402
 from linkingtk.train.arguments import TrainingArguments  # noqa: E402
 from linkingtk.train.cross_encoder import CrossEncoderTrainer  # noqa: E402
@@ -124,6 +125,69 @@ class TestTrainImprovesPrecision:
             trainer.eval_history[-1].metrics["Hits@1"] >= trainer.eval_history[0].metrics["Hits@1"]
         )
         assert trainer.eval_history[-1].metrics["Hits@1"] == 1.0
+
+
+class _SpyBlocking(ExactMatch):
+    """Records every `dataset2` it's called with, alongside real `ExactMatch` behavior."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.dataset2_seen: list[list[Entity] | EntitySource] = []
+
+    def candidate_pairs(
+        self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
+    ) -> list[tuple[Entity, Entity]]:
+        self.dataset2_seen.append(dataset2)
+        return super().candidate_pairs(dataset1, dataset2)
+
+
+class TestEvalDataset2:
+    """Regression coverage: `_evaluate()` used to always derive its candidate
+    pool from `eval_data`'s own (few, already-correct) targets, silently
+    scoring the WSD task far too easy -- measured directly on real SemCor
+    data (issue #39's benchmark investigation): 60% self-reported Hits@1
+    vs. 33% via the real `GlossBertLinker.link()` path on the same
+    held-out mentions and trained model.
+    """
+
+    def test_defaults_to_derived_dataset2_from_eval_data(self, tmp_path: Path) -> None:
+        pairs = _toy_pairs()
+        trainer, _model = _make_trainer(output_dir=tmp_path / "model", num_epochs=1)
+        spy = _SpyBlocking()
+        trainer.blocking = spy
+
+        trainer.train()
+
+        eval_dataset2 = spy.dataset2_seen[-1]
+        assert isinstance(eval_dataset2, list)
+        assert {e.id for e in eval_dataset2} == {e2.id for _e1, e2 in pairs}
+
+    def test_explicit_eval_dataset2_is_used_instead(self, tmp_path: Path) -> None:
+        pairs = _toy_pairs()
+        model = _ToyScorer(_WORDS)
+        args = TrainingArguments(
+            output_dir=str(tmp_path / "model"),
+            learning_rate=0.1,
+            num_epochs=1,
+            batch_size=16,
+            negative_samples_ratio=3,
+        )
+        wider_dataset2 = [e2 for _e1, e2 in pairs] + [Entity(id="s:decoy", labels=["alpha"])]
+        spy = _SpyBlocking()
+        trainer = CrossEncoderTrainer(
+            model=model,
+            args=args,
+            train_data=pairs,
+            eval_data=pairs,
+            eval_dataset2=wider_dataset2,
+            blocking=spy,
+        )
+
+        trainer.train()
+
+        eval_dataset2 = spy.dataset2_seen[-1]
+        assert isinstance(eval_dataset2, list)
+        assert {e.id for e in eval_dataset2} == {e.id for e in wider_dataset2}
 
 
 class TestCheckpoint:

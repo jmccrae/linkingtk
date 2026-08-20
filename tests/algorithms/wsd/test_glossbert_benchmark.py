@@ -186,7 +186,15 @@ def test_ufsac_dataset_to_glossbert_linker_pipeline(tmp_path: Path, fixture_sour
         negative_samples_ratio=2,
     )
     blocking = ExactMatch(top_k=10)
-    CrossEncoderTrainer(model=linker.model, args=args, train_data=pairs, blocking=blocking).train()
+    trainer = CrossEncoderTrainer(
+        model=linker.model,
+        args=args,
+        train_data=pairs,
+        eval_data=pairs,
+        eval_dataset2=senses,
+        blocking=blocking,
+    )
+    trainer.train()
 
     results = linker.link(mentions, senses, blocking=blocking)
     predictions = [(result.source_id, result.target_id) for result in results]
@@ -194,3 +202,14 @@ def test_ufsac_dataset_to_glossbert_linker_pipeline(tmp_path: Path, fixture_sour
 
     assert {source_id for source_id, _ in predictions} == {m.id for m in mentions}
     assert 0.0 <= report.metrics["precision@1"] <= 1.0
+
+    # eval_dataset2=senses (a real WnEntitySource, queried the same way link()
+    # does) means _evaluate()'s own candidate pool includes each lemma's real
+    # decoy sense too (bass-music, crane-bird) -- not just the two mentions'
+    # own correct answers, which is all a derived-from-eval_data dataset2
+    # would have contained. Regression coverage for issue #39's benchmark
+    # investigation: eval_history used to silently overstate Hits@1 by
+    # omitting exactly these decoys.
+    assert len(trainer.eval_history) == args.num_epochs
+    for epoch_report in trainer.eval_history:
+        assert 0.0 <= epoch_report.metrics["Hits@1"] <= 1.0

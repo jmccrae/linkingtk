@@ -1,7 +1,8 @@
 # GlossBERT: reproducing the paper's published results
 
 Unlike every other example on this site, this one runs **no training at
-all**. [`GlossBertLinker`](../reference/algorithms.md) loads
+all** -- see [the training verification example](glossbert_benchmark.md)
+for that side instead. [`GlossBertLinker`](../reference/algorithms.md) loads
 [Huang et al.](https://arxiv.org/pdf/1908.07245.pdf)'s own published
 checkpoint for their best-reported configuration, GlossBERT(Sent-CLS-WS),
 directly into `GlossBertEncoder` -- its `BertForSequenceClassification`

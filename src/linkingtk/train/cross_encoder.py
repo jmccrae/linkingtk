@@ -26,6 +26,7 @@ from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.blocking.negative_sampling import sample_hard_negatives
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 from linkingtk.eval.evaluator import Evaluator
 from linkingtk.train._optim import build_optimizer
 from linkingtk.train._peft import apply_peft
@@ -76,18 +77,34 @@ class CrossEncoderTrainer:
         eval_data: Optional held-out positive pairs. If given, every
             epoch's end scores `blocking.candidate_pairs(eval_dataset1,
             eval_dataset2)` and appends a Hits@1 report to
-            ``eval_history``. Deliberately **not** exhaustive against the
-            full `eval_data`-derived ``dataset2`` the way
-            ``Trainer._evaluate`` is: unlike EA/EL (where blocking is a
-            scalability shortcut over a semantically meaningful full
-            target set, so exhaustive ranking is the honest measure --
-            see issue #37/#38), DESIGN.md defines WSD blocking as *always*
-            exact, because ranking a mention against an unrelated lemma's
-            senses isn't a meaningful question in the first place. A
-            mention's own blocking-restricted candidates -- typically just
-            its lemma's own senses -- *are* the right ranking scope here,
-            matching the standard WSD "all-words" evaluation protocol
-            (and every published WSD system, including GlossBERT itself).
+            ``eval_history``. Deliberately **not** exhaustive against a
+            full target set the way ``Trainer._evaluate`` is: unlike EA/EL
+            (where blocking is a scalability shortcut over a semantically
+            meaningful full target set, so exhaustive ranking is the
+            honest measure -- see issue #37/#38), DESIGN.md defines WSD
+            blocking as *always* exact, because ranking a mention against
+            an unrelated lemma's senses isn't a meaningful question in the
+            first place. A mention's own blocking-restricted candidates --
+            typically just its lemma's own senses -- *are* the right
+            ranking scope here, matching the standard WSD "all-words"
+            evaluation protocol (and every published WSD system, including
+            GlossBERT itself).
+        eval_dataset2: The real target set (or
+            [EntitySource][linkingtk.core.source.EntitySource], e.g. a
+            [WnEntitySource][linkingtk.sources.wn.WnEntitySource]) to block
+            `eval_data`'s sources against. Defaults to the deduplicated
+            targets *within* `eval_data` itself, matching
+            ``Trainer._evaluate``'s convention -- correct for EA/EL, where
+            the eval split's own KB subset already stands in for the full
+            target set, but silently too easy for WSD: the eval split's
+            own gold senses are a far narrower (and far less confusable)
+            candidate pool than a mention's real lemma-wide sense
+            inventory. Concretely, without this the reported Hits@1 can
+            come out roughly 2x optimistic (measured directly:
+            60% self-reported vs. 33% measured via
+            [GlossBertLinker][linkingtk.algorithms.wsd.glossbert.GlossBertLinker]'s
+            own ``link()``, same held-out mentions, same trained model --
+            always pass the real `dataset2` for WSD.
         blocking: Strategy used to mine hard negatives from ``train_data``
             (via
             [sample_hard_negatives][linkingtk.blocking.negative_sampling.sample_hard_negatives])
@@ -106,12 +123,14 @@ class CrossEncoderTrainer:
         args: TrainingArguments,
         train_data: list[tuple[Entity, Entity]],
         eval_data: list[tuple[Entity, Entity]] | None = None,
+        eval_dataset2: list[Entity] | EntitySource | None = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> None:
         self.model = model
         self.args = args
         self.train_data = train_data
         self.eval_data = eval_data
+        self.eval_dataset2 = eval_dataset2
         self.blocking = blocking
         self.eval_history: list[EvaluationReport] = []
 
@@ -158,7 +177,8 @@ class CrossEncoderTrainer:
 
     def _evaluate(self) -> EvaluationReport:
         assert self.eval_data is not None  # only called when eval_data is set
-        dataset1, dataset2, ground_truth = _entities_and_ground_truth(self.eval_data)
+        dataset1, derived_dataset2, ground_truth = _entities_and_ground_truth(self.eval_data)
+        dataset2 = self.eval_dataset2 if self.eval_dataset2 is not None else derived_dataset2
         self.model.eval()
         with torch.no_grad():
             pairs = list(self.blocking.candidate_pairs(dataset1, dataset2))
