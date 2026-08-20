@@ -37,6 +37,7 @@ nav:
       - Entity Linking:
           - ReFinED-style bi-encoder benchmark: examples/el_benchmarks.md
       - Lesk WSD: examples/lesk_wsd.md
+      - WSD against live WordNet (wn): examples/wn_wsd.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
   - Datasets:
       - Overview: datasets/index.md
@@ -44,6 +45,7 @@ nav:
       - Entity alignment datasets: datasets/real_world_ea.md
   - API Reference:
       - Core: reference/core.md
+      - Sources: reference/sources.md
       - Blocking: reference/blocking.md
       - Algorithms: reference/algorithms.md
       - Datasets: reference/datasets.md

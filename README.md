@@ -19,7 +19,8 @@ for each task. The generated API reference is published at
 linkingtk/
 ├── data/                       # Local data files
 ├── src/linkingtk/
-│   ├── core/                   # Entity, AlignmentResult
+│   ├── core/                   # Entity, AlignmentResult, EntitySource
+│   ├── sources/                 # EntitySource wrappers (wn, ...)
 │   ├── blocking/                # BlockingStrategy, ExactMatch, ...
 │   ├── algorithms/              # BaseLinker + ea/el/wsd/wsa submodules
 │   ├── datasets/                # Dataset loaders & HF integrations

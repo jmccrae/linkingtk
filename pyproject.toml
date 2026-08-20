@@ -20,7 +20,8 @@ kge = [
     "pykeen>=1.10",
     "rapidfuzz>=3.14.5",
 ]
-all = ["linkingtk[graph,nlp,kge]"]
+wn = ["wn>=0.9"]
+all = ["linkingtk[graph,nlp,kge,wn]"]
 
 [dependency-groups]
 dev = [
