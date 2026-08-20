@@ -15,6 +15,7 @@ method, one logit-margin per pair (higher = more likely a true match).
 
 from __future__ import annotations
 
+import logging
 import random
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -35,6 +36,8 @@ from linkingtk.utils.device import resolve_device
 
 if TYPE_CHECKING:
     from linkingtk.eval.report import EvaluationReport
+
+logger = logging.getLogger("linkingtk")
 
 DEFAULT_BLOCKING = ExactMatch()
 
@@ -157,9 +160,20 @@ class CrossEncoderTrainer:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        for _ in range(args.num_epochs):
+        logger.info(
+            "CrossEncoderTrainer: %d examples (%d positive, %d mined negative), "
+            "%d batches/epoch, %d epochs",
+            len(examples),
+            len(self.train_data),
+            len(negatives),
+            num_batches_per_epoch,
+            args.num_epochs,
+        )
+
+        for epoch in range(args.num_epochs):
             shuffled = list(examples)
             random.shuffle(shuffled)
+            loss_total = 0.0
             for start in range(0, len(shuffled), args.batch_size):
                 batch = shuffled[start : start + args.batch_size]
                 pairs = [(entity1, entity2) for entity1, entity2, _label in batch]
@@ -171,14 +185,32 @@ class CrossEncoderTrainer:
                 optimizer.step()
                 if scheduler is not None:
                     scheduler.step()
+                loss_total += float(loss.item())
+
+            mean_loss = loss_total / max(num_batches_per_epoch, 1)
 
             if self.eval_data is not None:
                 self.eval_history.append(self._evaluate())
+                logger.info(
+                    "CrossEncoderTrainer: epoch %d/%d done, mean loss %.4f, eval %s",
+                    epoch + 1,
+                    args.num_epochs,
+                    mean_loss,
+                    self.eval_history[-1].metrics,
+                )
+            else:
+                logger.info(
+                    "CrossEncoderTrainer: epoch %d/%d done, mean loss %.4f",
+                    epoch + 1,
+                    args.num_epochs,
+                    mean_loss,
+                )
 
             # Saved after *every* epoch, not just at the end -- a long run
             # (e.g. full-corpus WSD training) can span hours unattended;
             # without this, an interruption on epoch 5 of 6 loses everything.
             torch.save(self.model.state_dict(), output_dir / "model.pt")
+            logger.info("CrossEncoderTrainer: checkpoint saved to %s", output_dir / "model.pt")
 
     def _evaluate(self) -> EvaluationReport:
         assert self.eval_data is not None  # only called when eval_data is set
