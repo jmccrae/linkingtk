@@ -31,7 +31,8 @@ from linkingtk.blocking.exact import ExactMatch
 from linkingtk.blocking.negative_sampling import sample_hard_negatives
 from linkingtk.core.entity import Entity
 from linkingtk.eval.evaluator import Evaluator
-from linkingtk.exceptions import LinkingTKError
+from linkingtk.train._optim import build_optimizer
+from linkingtk.train._peft import apply_peft
 from linkingtk.train.arguments import TrainingArguments
 from linkingtk.utils.device import resolve_device
 
@@ -109,19 +110,7 @@ class Trainer:
         device = resolve_device(args.device)
         self.model.to(device)
 
-        if args.use_peft:
-            if args.peft_config is None:
-                raise LinkingTKError(
-                    "TrainingArguments.use_peft=True requires peft_config to be set "
-                    "-- there's no safe universal default for LoRA's target_modules, "
-                    "since it differs per model architecture."
-                )
-            from peft import get_peft_model
-
-            # peft's stubs type get_peft_model's model arg as PreTrainedModel, but it
-            # works generically on any nn.Module -- that's the whole point of
-            # TrainableModel not being HF-specific.
-            self.model = get_peft_model(self.model, args.peft_config)  # type: ignore[arg-type]
+        self.model = apply_peft(self.model, args)
 
         dataset1, dataset2, ground_truth = _entities_and_ground_truth(self.train_data)
         negatives_by_source = _group_by_source(
@@ -130,7 +119,10 @@ class Trainer:
             )
         )
 
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate)
+        num_batches_per_epoch = -(-len(self.train_data) // args.batch_size)
+        optimizer, scheduler = build_optimizer(
+            self.model, args, num_batches_per_epoch * args.num_epochs
+        )
 
         for _ in range(args.num_epochs):
             shuffled = list(self.train_data)
@@ -143,6 +135,8 @@ class Trainer:
                 optimizer.zero_grad()
                 loss.backward()  # type: ignore[no-untyped-call]
                 optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
 
             if self.eval_data is not None:
                 self.eval_history.append(self._evaluate())

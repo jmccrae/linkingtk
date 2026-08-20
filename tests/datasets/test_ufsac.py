@@ -71,8 +71,15 @@ class TestLoad:
     def test_parses_words_with_sense_keys_as_mentions(self, fixture_source: str) -> None:
         mentions, senses, ground_truth = UfsacDataset(source=fixture_source).load()
 
-        assert {m.labels[0] for m in mentions} == {"group", "met"}
+        assert {m.labels[0] for m in mentions} == {"group", "meet"}
         assert isinstance(senses, WnEntitySource)
+
+    def test_labels_use_lemma_not_inflected_surface_form(self, fixture_source: str) -> None:
+        mentions, _senses, _gt = UfsacDataset(source=fixture_source).load()
+
+        met_mention = next(m for m in mentions if m.labels == ["meet"])
+        text, start, end = met_mention.context
+        assert text[start:end] == "met"
 
     def test_reconstructs_sentence_context_by_joining_surface_forms(
         self, fixture_source: str
@@ -116,4 +123,4 @@ class TestXzCompression:
 
         mentions, _senses, _gt = UfsacDataset(source=str(path)).load()
 
-        assert {m.labels[0] for m in mentions} == {"group", "met"}
+        assert {m.labels[0] for m in mentions} == {"group", "meet"}

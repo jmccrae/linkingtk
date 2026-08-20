@@ -20,6 +20,13 @@ dictionary), ``dataset2`` is a
 [WnEntitySource][linkingtk.sources.wn.WnEntitySource] rather than a
 materialized ``list[Entity]`` -- this is the loader-side half of that
 design; see [EntitySource][linkingtk.core.source.EntitySource].
+
+Each mention's ``labels`` is its ``lemmas`` layer entry, not its literal
+surface text -- candidate generation (``ExactMatch`` querying a
+``WnEntitySource`` by label) needs the dictionary form (e.g. "catch"),
+since an inflected surface form (e.g. "caught") won't exact-match
+WordNet's own lemma index. The surface form is still recoverable from
+``context``'s span for anything that needs the literal text.
 """
 
 from __future__ import annotations
@@ -78,11 +85,12 @@ def _parse_document(doc_id: str, raw: dict[str, Any]) -> tuple[list[Entity], lis
             continue
         text = sentence["text"]
         tokens = sentence["tokens"]
+        lemmas = sentence["lemmas"]
         for index, synset_id in sentence.get("oewn_key", []):
             start, end = tokens[index]
             mention_id = f"semcor:{doc_id}:{sent_id}:{index}"
             mentions.append(
-                Entity(id=mention_id, labels=[text[start:end]], context=(text, start, end))
+                Entity(id=mention_id, labels=[lemmas[index]], context=(text, start, end))
             )
             ground_truth.append((mention_id, synset_id))
     return mentions, ground_truth

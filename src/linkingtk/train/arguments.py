@@ -1,4 +1,6 @@
-"""Configuration for [linkingtk.train.trainer.Trainer][] runs."""
+"""Configuration for [Trainer][linkingtk.train.trainer.Trainer] and
+[CrossEncoderTrainer][linkingtk.train.cross_encoder.CrossEncoderTrainer] runs.
+"""
 
 from __future__ import annotations
 
@@ -29,17 +31,34 @@ class TrainingArguments:
             hard import of ``peft`` at the dataclass-definition level.
         num_epochs: Number of passes over the training data.
         batch_size: Number of entity pairs per batch.
-        loss: Contrastive objective. ``"infonce"`` (default) treats every
+        loss: Contrastive objective for ``Trainer`` (ignored by
+            ``CrossEncoderTrainer``, which always trains with binary
+            cross-entropy -- there's no separately-embedded pair of
+            vectors to contrast). ``"infonce"`` (default) treats every
             other pair's target in the batch, plus each anchor's own
             mined hard negatives, as negatives and applies a
             softmax-temperature cross-entropy loss. ``"margin"`` applies
             ``torch.nn.MarginRankingLoss`` between each anchor's positive
             and each of its mined hard negatives.
         temperature: Softmax temperature for the ``"infonce"`` loss.
-        margin: Margin for the ``"margin"`` loss.
+            Ignored by ``CrossEncoderTrainer``.
+        margin: Margin for the ``"margin"`` loss. Ignored by
+            ``CrossEncoderTrainer``.
         device: Torch device to train on, e.g. ``"cpu"`` (default) or
             ``"cuda"``. Resolved via
             [resolve_device][linkingtk.utils.device.resolve_device].
+        weight_decay: AdamW weight decay, applied to every parameter
+            except bias and LayerNorm weights (standard BERT fine-tuning
+            convention). Defaults to ``0.01``, ``torch.optim.AdamW``'s own
+            default -- preserves ``Trainer``'s original behavior, which
+            relied on that implicit default rather than setting it
+            explicitly.
+        warmup_ratio: Fraction of total optimizer steps spent linearly
+            warming up the learning rate before linearly decaying it back
+            to zero, via ``transformers.get_linear_schedule_with_warmup``.
+            ``0.0`` (the default) skips the scheduler entirely -- a flat
+            learning rate for the whole run, every existing caller's
+            behavior before this field existed.
     """
 
     output_dir: str
@@ -53,3 +72,5 @@ class TrainingArguments:
     temperature: float = 0.05
     margin: float = 1.0
     device: str = "cpu"
+    weight_decay: float = 0.01
+    warmup_ratio: float = 0.0

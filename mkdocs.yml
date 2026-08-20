@@ -38,6 +38,7 @@ nav:
           - ReFinED-style bi-encoder benchmark: examples/el_benchmarks.md
       - Lesk WSD: examples/lesk_wsd.md
       - WSD against live WordNet (wn): examples/wn_wsd.md
+      - GlossBERT reproduction: examples/glossbert_reproduction.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
   - Datasets:
       - Overview: datasets/index.md

@@ -56,24 +56,33 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
     only one sentence's words at a time -- UFSAC has no raw untokenized
     sentence text, so each mention's ``context`` is reconstructed by
     joining that sentence's ``surface_form``s with spaces.
+
+    Each mention's ``labels`` is its WordNet ``lemma`` attribute, not its
+    ``surface_form`` -- candidate generation (``ExactMatch`` querying an
+    ``EntitySource`` by label) needs the dictionary form (e.g. "catch"),
+    since an inflected surface form (e.g. "caught") won't exact-match
+    WordNet's own lemma index. The surface form is still recoverable from
+    ``context``'s span for anything that needs the literal text (e.g.
+    [GlossBertEncoder][linkingtk.algorithms.wsd.glossbert.GlossBertEncoder]'s
+    gloss-text formatting).
     """
     mentions: list[Entity] = []
     ground_truth: list[tuple[str, str]] = []
     doc_id = ""
     sent_id = ""
     sent_index = 0
-    words: list[tuple[str, str | None]] = []
+    words: list[tuple[str, str, str | None]] = []
 
     def flush_sentence() -> None:
-        text = " ".join(surface for surface, _ in words)
+        text = " ".join(surface for surface, _lemma, _key in words)
         offset = 0
-        for index, (surface, sense_key) in enumerate(words):
+        for index, (surface, lemma, sense_key) in enumerate(words):
             start = offset
             end = offset + len(surface)
             offset = end + 1
             if sense_key is not None:
                 mention_id = f"ufsac:{doc_id}:{sent_id}:{index}"
-                mentions.append(Entity(id=mention_id, labels=[surface], context=(text, start, end)))
+                mentions.append(Entity(id=mention_id, labels=[lemma], context=(text, start, end)))
                 ground_truth.append((mention_id, sense_key))
         words.clear()
 
@@ -85,8 +94,9 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
             sent_index += 1
         elif event == "end" and elem.tag == "word":
             surface = elem.get("surface_form", "")
+            lemma = elem.get("lemma", surface)
             key_attr = elem.get("wn30_key")
-            words.append((surface, key_attr.split(";")[0] if key_attr else None))
+            words.append((surface, lemma, key_attr.split(";")[0] if key_attr else None))
             elem.clear()
         elif event == "end" and elem.tag == "sentence":
             flush_sentence()

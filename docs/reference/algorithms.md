@@ -78,6 +78,10 @@
 
 ::: linkingtk.algorithms.wsd.lesk
 
+### GlossBERT
+
+::: linkingtk.algorithms.wsd.glossbert
+
 ## Word Sense Alignment
 
 ::: linkingtk.algorithms.wsa

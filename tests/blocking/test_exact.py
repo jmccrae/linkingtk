@@ -92,3 +92,19 @@ class TestEntitySource:
         ExactMatch().candidate_pairs(dataset1, source)
 
         assert source.search_calls == 1
+
+    def test_top_k_is_forwarded_to_search(self) -> None:
+        dataset1 = [Entity(id="a1", labels=["cat"])]
+        recorded: list[int] = []
+
+        class _RecordingSource(EntitySource):
+            def search(self, query: str, top_k: int = 10) -> list[Entity]:
+                recorded.append(top_k)
+                return []
+
+            def get(self, entity_id: str) -> Entity | None:
+                return None
+
+        ExactMatch(top_k=50).candidate_pairs(dataset1, _RecordingSource())
+
+        assert recorded == [50]

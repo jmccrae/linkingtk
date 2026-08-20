@@ -25,7 +25,7 @@ linkingtk/
 │   ├── algorithms/              # BaseLinker + ea/el/wsd/wsa submodules
 │   ├── datasets/                # Dataset loaders & HF integrations
 │   ├── utils/                   # NetworkX / RDFLib graph helpers
-│   ├── train/                   # Trainer / TrainingArguments
+│   ├── train/                   # Trainer / CrossEncoderTrainer / TrainingArguments
 │   └── eval/                    # Evaluator / EvaluationReport
 ├── tests/                      # Mirrors src/ layout
 └── examples/                   # Runnable sample scripts

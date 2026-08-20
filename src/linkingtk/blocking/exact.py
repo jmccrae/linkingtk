@@ -19,7 +19,19 @@ class ExactMatch(BlockingStrategy):
     queries ``dataset2.search(label)`` per label instead of enumerating the
     whole target set, then keeps only the results that actually have a
     matching label -- same semantics, no materialization required.
+
+    Args:
+        top_k: Forwarded to ``dataset2.search(label, top_k=...)`` when
+            ``dataset2`` is an ``EntitySource`` -- ignored for a plain
+            ``list[Entity]`` ``dataset2``, which has no such cap. The
+            default (``EntitySource.search``'s own default) is too narrow
+            for a highly polysemous word once every one of its senses is a
+            valid candidate (e.g. WSD against a full WordNet) -- raise
+            this in that case.
     """
+
+    def __init__(self, top_k: int = 10) -> None:
+        self.top_k = top_k
 
     def candidate_pairs(
         self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
@@ -53,10 +65,15 @@ class ExactMatch(BlockingStrategy):
         for entity1 in dataset1:
             seen: set[str] = set()
             for text in set(label_texts(entity1)):
-                for entity2 in dataset2.search(text):
+                # Case-insensitive on this side only: an EntitySource's own
+                # search() may itself be case-insensitive (e.g. `wn`'s --
+                # querying "friday" finds the synset WordNet itself lemmatizes
+                # as "Friday"), so a case-sensitive post-filter here would
+                # silently drop real matches search() already found.
+                for entity2 in dataset2.search(text, top_k=self.top_k):
                     if entity2.id in seen:
                         continue
-                    if text in set(label_texts(entity2)):
+                    if text.lower() in {t.lower() for t in label_texts(entity2)}:
                         pairs.append((entity1, entity2))
                         seen.add(entity2.id)
         return pairs
