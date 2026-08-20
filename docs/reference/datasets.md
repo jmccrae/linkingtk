@@ -39,3 +39,11 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 ## Zeshel
 
 ::: linkingtk.datasets.zeshel
+
+## SemCor
+
+::: linkingtk.datasets.semcor
+
+## UFSAC
+
+::: linkingtk.datasets.ufsac

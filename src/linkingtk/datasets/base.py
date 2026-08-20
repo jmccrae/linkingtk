@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from linkingtk.core.entity import Entity
+from linkingtk.core.source import EntitySource
 from linkingtk.utils.graph import Graph
 
 
@@ -17,12 +18,18 @@ class DatasetLoader(ABC):
     """
 
     @abstractmethod
-    def load(self) -> tuple[list[Entity], list[Entity], list[tuple[str, str]]]:
+    def load(self) -> tuple[list[Entity], list[Entity] | EntitySource, list[tuple[str, str]]]:
         """Load the dataset.
 
         Returns:
             A tuple of ``(dataset1, dataset2, ground_truth)`` where
             ``ground_truth`` is a list of ``(source_id, target_id)`` pairs.
+            ``dataset2`` is an [EntitySource][linkingtk.core.source.EntitySource]
+            rather than a materialized list for loaders whose targets have
+            no fixed candidate list to enumerate (e.g. a WSD corpus tagged
+            against a full dictionary) -- see
+            [SemCorDataset][linkingtk.datasets.semcor.SemCorDataset] and
+            [UfsacDataset][linkingtk.datasets.ufsac.UfsacDataset].
         """
 
 

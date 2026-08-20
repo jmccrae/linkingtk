@@ -5,7 +5,7 @@ import types
 
 import pytest
 
-from linkingtk.sources.wn import WnEntitySource
+from linkingtk.sources.wn import WnEntitySource, sensekey_to_synset_id
 
 
 class _FakeWnError(Exception):
@@ -45,9 +45,22 @@ class _FakeSynset:
         return self._definition
 
 
+class _FakeSense:
+    def __init__(self, identifier: str, synset: _FakeSynset) -> None:
+        self._identifier = identifier
+        self._synset = synset
+
+    def metadata(self) -> dict[str, str]:
+        return {"identifier": self._identifier}
+
+    def synset(self) -> _FakeSynset:
+        return self._synset
+
+
 def _fake_wn_module(
     synsets_by_query: dict[str, list[_FakeSynset]],
     synsets_by_id: dict[str, _FakeSynset],
+    senses_by_lemma: dict[str, list[_FakeSense]] | None = None,
 ) -> types.ModuleType:
     module = types.ModuleType("wn")
 
@@ -67,8 +80,14 @@ def _fake_wn_module(
             raise module.Error(f"no such synset: {id}")  # type: ignore[attr-defined]
         return found
 
+    def senses(
+        form: str | None = None, pos: str | None = None, *, lexicon: str | None = None
+    ) -> list[_FakeSense]:
+        return (senses_by_lemma or {}).get(form or "", [])
+
     module.synsets = synsets  # type: ignore[attr-defined]
     module.synset = synset  # type: ignore[attr-defined]
+    module.senses = senses  # type: ignore[attr-defined]
     module.Error = _FakeWnError  # type: ignore[attr-defined]
     return module
 
@@ -139,3 +158,39 @@ class TestGet:
         source = WnEntitySource(lang="en")
 
         assert source.get("no-such-synset") is None
+
+
+class TestSensekeyToSynsetId:
+    def test_matches_by_identifier_metadata(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        group_top = _FakeSynset(id="omw-en-00031264-n", words=[], definition=None)
+        group_other = _FakeSynset(id="omw-en-14621446-n", words=[], definition=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={
+                "group": [
+                    _FakeSense("group%1:03:00::", group_top),
+                    _FakeSense("group%1:07:00::", group_other),
+                ]
+            },
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert sensekey_to_synset_id("group%1:03:00::") == "omw-en-00031264-n"
+        assert sensekey_to_synset_id("group%1:07:00::") == "omw-en-14621446-n"
+
+    def test_no_matching_sense_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            senses_by_lemma={"group": [_FakeSense("group%1:03:00::", _FakeSynset("x", [], None))]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert sensekey_to_synset_id("group%1:99:00::") is None
+
+    def test_unknown_lemma_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _fake_wn_module(synsets_by_query={}, synsets_by_id={})
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert sensekey_to_synset_id("nonexistent%1:03:00::") is None

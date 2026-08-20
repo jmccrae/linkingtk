@@ -76,3 +76,39 @@ class WnEntitySource(EntitySource):
         if self.lang is not None:
             return list(synset.lemmas())
         return [(word.lemma(), word.lexicon().language) for word in synset.words()]
+
+
+def sensekey_to_synset_id(sense_key: str, lexicon: str = "omw-en:1.4") -> str | None:
+    """Resolve a Princeton WordNet sense key (e.g. ``"group%1:03:00::"``) to its synset id.
+
+    A sense key isn't a `wn` id by itself -- `wn` has no lookup-by-sense-key
+    API, so this instead lists every sense of the key's lemma in `lexicon`
+    and matches by each sense's own recorded ``identifier`` metadata (the
+    sense key `wn` was built from). Used by
+    [UfsacDataset][linkingtk.datasets.ufsac.UfsacDataset], whose corpora are
+    tagged with WordNet 3.0 sense keys rather than synset ids.
+
+    Args:
+        sense_key: A WordNet sense key, e.g. ``"group%1:03:00::"``.
+        lexicon: A `wn` lexicon specifier whose senses carry the original
+            sense key as their ``identifier`` metadata -- true of
+            ``"omw-en:1.4"`` (the default, OMW's English WordNet based on
+            WordNet 3.0) but not of every lexicon.
+
+    Returns:
+        The matching synset's `wn` id, or ``None`` if no sense in `lexicon`
+        carries that sense key.
+
+    Raises:
+        OptionalDependencyError: If `wn` isn't installed.
+    """
+    try:
+        import wn
+    except ImportError as exc:
+        raise OptionalDependencyError("sensekey_to_synset_id", "wn") from exc
+
+    lemma = sense_key.split("%", 1)[0]
+    for sense in wn.senses(lemma, lexicon=lexicon):
+        if sense.metadata().get("identifier") == sense_key:
+            return sense.synset().id
+    return None

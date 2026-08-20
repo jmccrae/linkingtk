@@ -43,6 +43,7 @@ nav:
       - Overview: datasets/index.md
       - Toy datasets: datasets/toy.md
       - Entity alignment datasets: datasets/real_world_ea.md
+      - Word sense disambiguation datasets: datasets/wsd.md
   - API Reference:
       - Core: reference/core.md
       - Sources: reference/sources.md

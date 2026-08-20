@@ -23,7 +23,9 @@ from linkingtk.datasets.openea_native import (
     EnDe15KAttrDataset,
     EnFr15KAttrDataset,
 )
+from linkingtk.datasets.semcor import SemCorDataset
 from linkingtk.datasets.toy import ToyEADataset, ToyELDataset, ToyWSADataset, ToyWSDDataset
+from linkingtk.datasets.ufsac import UfsacDataset
 from linkingtk.datasets.wordnet_wikidata import (
     WordNetWikidataLanguagesDataset,
     WordNetWikidataLocationsDataset,
@@ -57,4 +59,6 @@ __all__ = [
     "WordNetWikidataLocationsDataset",
     "WordNetWikidataOrganismsDataset",
     "WordNetWikidataOrganismsHardDataset",
+    "SemCorDataset",
+    "UfsacDataset",
 ]
