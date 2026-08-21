@@ -12,6 +12,7 @@ the download step.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from linkingtk.core.entity import Entity, LabelWithLang
@@ -20,6 +21,9 @@ from linkingtk.exceptions import OptionalDependencyError
 
 if TYPE_CHECKING:
     import wn as wn_module
+
+_OMW_EN_SYNSET_ID_RE = re.compile(r"^omw-en-(\d{8})-([nvasr])$")
+_WN30_OFFSET_RE = re.compile(r"^wn:(\d{8})([nvasr])$")
 
 # Multi-word lemmas (e.g. phrasal verbs) are joined with underscores in the
 # classic WordNet distribution format (and so in every corpus in this
@@ -216,3 +220,88 @@ def synset_id_to_sensekey(synset_id: str, lemma: str, lexicon: str = "omw-en:1.4
             identifier = sense.metadata().get("identifier")
             return identifier if isinstance(identifier, str) else None
     return None
+
+
+def synset_id_to_wn30_offset(synset_id: str) -> str:
+    """Convert an ``omw-en:1.4`` synset id to its WordNet 3.0 byte-offset form.
+
+    E.g. ``"omw-en-02084071-n"`` -> ``"wn:02084071n"``. Pure string
+    manipulation, not a `wn` lookup -- confirmed directly that
+    ``omw-en:1.4``'s own synset ids already embed the PWN 3.0 offset
+    (``wn.synsets("dog", pos="n", lexicon="omw-en:1.4")[0].id ==
+    "omw-en-02084071-n"``, matching EWISER's own checkpoint dictionary
+    entry ``"wn:02084071n"``). Used to look up a candidate sense's index in
+    [EwiserEncoder][linkingtk.algorithms.wsd.ewiser.EwiserEncoder]'s
+    checkpoint-loaded output vocabulary.
+
+    This does **not** hold for ``oewn:*`` lexicons, whose offsets have
+    since diverged from PWN 3.0 (confirmed: ``oewn:2021``'s id for the same
+    synset is ``"oewn-01930264-v"`` for an unrelated example -- a different
+    number, not just a different prefix).
+
+    Args:
+        synset_id: An ``omw-en:1.4`` synset id, e.g. ``"omw-en-02084071-n"``.
+
+    Returns:
+        The WordNet 3.0 offset form, e.g. ``"wn:02084071n"``.
+
+    Raises:
+        ValueError: If `synset_id` isn't in ``omw-en:1.4``'s
+            ``"omw-en-########-{n,v,a,r,s}"`` shape.
+    """
+    match = _OMW_EN_SYNSET_ID_RE.match(synset_id)
+    if match is None:
+        raise ValueError(
+            f"{synset_id!r} isn't an omw-en:1.4 synset id (expected "
+            '"omw-en-########-{n,v,a,r,s}") -- the WordNet 3.0 offset '
+            "conversion only applies to omw-en:1.4, whose synset ids already "
+            "embed the PWN 3.0 byte offset directly; other lexicons (e.g. "
+            "oewn:*) have since diverged and have no such mapping."
+        )
+    offset, pos = match.groups()
+    return f"wn:{offset}{pos}"
+
+
+def wn30_offset_to_synset_id(offset: str, lexicon: str = "omw-en:1.4") -> str | None:
+    """The inverse of
+    [synset_id_to_wn30_offset][linkingtk.sources.wn.synset_id_to_wn30_offset]:
+    given a WordNet 3.0 offset (e.g. ``"wn:02084071n"``), return the
+    matching synset id in `lexicon`.
+
+    Unlike `synset_id_to_wn30_offset`, this validates existence via a real
+    `wn` lookup rather than pure string construction, since `offset` may
+    come from an external source (e.g. an EWISER checkpoint's own
+    dictionary file) that doesn't necessarily resolve in the installed
+    lexicon.
+
+    Args:
+        offset: A WordNet 3.0 offset, e.g. ``"wn:02084071n"``.
+        lexicon: A `wn` lexicon specifier whose synset ids follow
+            ``omw-en:1.4``'s offset-embedding convention (see
+            `synset_id_to_wn30_offset`). Defaults to ``"omw-en:1.4"``.
+
+    Returns:
+        The matching synset id, or ``None`` if `offset` doesn't resolve in
+        `lexicon`.
+
+    Raises:
+        ValueError: If `offset` isn't in ``"wn:########pos"`` shape.
+        OptionalDependencyError: If `wn` isn't installed.
+    """
+    match = _WN30_OFFSET_RE.match(offset)
+    if match is None:
+        raise ValueError(f'{offset!r} isn\'t a WordNet 3.0 offset (expected "wn:########pos")')
+
+    try:
+        import wn
+    except ImportError as exc:
+        raise OptionalDependencyError("wn30_offset_to_synset_id", "wn") from exc
+
+    digits, pos = match.groups()
+    prefix = lexicon.split(":", 1)[0]
+    synset_id = f"{prefix}-{digits}-{pos}"
+    try:
+        wn.synset(synset_id, lexicon=lexicon)
+    except wn.Error:
+        return None
+    return synset_id

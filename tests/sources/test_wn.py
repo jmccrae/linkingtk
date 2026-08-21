@@ -10,6 +10,8 @@ from linkingtk.sources.wn import (
     _adjective_satellite_variant,
     sensekey_to_synset_id,
     synset_id_to_sensekey,
+    synset_id_to_wn30_offset,
+    wn30_offset_to_synset_id,
 )
 
 
@@ -325,3 +327,52 @@ class TestSynsetIdToSensekey:
         synset_id = sensekey_to_synset_id("group%1:03:00::")
         assert synset_id is not None
         assert synset_id_to_sensekey(synset_id, "group") == "group%1:03:00::"
+
+
+class TestSynsetIdToWn30Offset:
+    def test_converts_noun(self) -> None:
+        assert synset_id_to_wn30_offset("omw-en-02084071-n") == "wn:02084071n"
+
+    def test_converts_every_pos(self) -> None:
+        for pos in "nvasr":
+            assert synset_id_to_wn30_offset(f"omw-en-00000001-{pos}") == f"wn:00000001{pos}"
+
+    def test_non_omw_en_synset_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="omw-en:1.4"):
+            synset_id_to_wn30_offset("oewn-01930264-v")
+
+    def test_malformed_synset_id_raises(self) -> None:
+        with pytest.raises(ValueError):
+            synset_id_to_wn30_offset("nonsense")
+
+
+class TestWn30OffsetToSynsetId:
+    def test_resolves_existing_offset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dog = _FakeSynset(id="omw-en-02084071-n", words=[], definition=None)
+        module = _fake_wn_module(synsets_by_query={}, synsets_by_id={"omw-en-02084071-n": dog})
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert wn30_offset_to_synset_id("wn:02084071n") == "omw-en-02084071-n"
+
+    def test_unresolved_offset_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _fake_wn_module(synsets_by_query={}, synsets_by_id={})
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        assert wn30_offset_to_synset_id("wn:99999999n") is None
+
+    def test_malformed_offset_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _fake_wn_module(synsets_by_query={}, synsets_by_id={})
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        with pytest.raises(ValueError):
+            wn30_offset_to_synset_id("nonsense")
+
+    def test_round_trips_with_synset_id_to_wn30_offset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dog = _FakeSynset(id="omw-en-02084071-n", words=[], definition=None)
+        module = _fake_wn_module(synsets_by_query={}, synsets_by_id={"omw-en-02084071-n": dog})
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        offset = synset_id_to_wn30_offset("omw-en-02084071-n")
+        assert wn30_offset_to_synset_id(offset) == "omw-en-02084071-n"
