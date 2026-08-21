@@ -62,7 +62,7 @@ def mention_sentence_and_span(entity: Entity) -> tuple[str, int, int]:
     """The sentence text and mention character span to run `EwiserEncoder` against.
 
     Uses `context`'s ``(text, start, end)`` offsets when it's a
-    [ContextWithSpan][linkingtk.core.entity.ContextWithSpan] (the shape
+    `ContextWithSpan` (see [linkingtk.core.entity][]) (the shape
     [SemCorDataset][linkingtk.datasets.semcor.SemCorDataset]/
     [UfsacDataset][linkingtk.datasets.ufsac.UfsacDataset] mentions carry --
     every mention from the same sentence shares an identical `text`, which

@@ -82,6 +82,20 @@
 
 ::: linkingtk.algorithms.wsd.glossbert
 
+### EWISER
+
+::: linkingtk.algorithms.wsd.ewiser
+
+::: linkingtk.algorithms.wsd._ewiser_vocab
+
+::: linkingtk.algorithms.wsd._ewiser_graph
+
+::: linkingtk.algorithms.wsd._ewiser_structured_logits
+
+::: linkingtk.algorithms.wsd._ewiser_decoder
+
+::: linkingtk.algorithms.wsd._ewiser_text
+
 ## Word Sense Alignment
 
 ::: linkingtk.algorithms.wsa

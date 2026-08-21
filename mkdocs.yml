@@ -40,6 +40,9 @@ nav:
       - WSD against live WordNet (wn): examples/wn_wsd.md
       - GlossBERT reproduction: examples/glossbert_reproduction.md
       - GlossBERT training verification: examples/glossbert_benchmark.md
+      - GlossBERT full-corpus training: examples/glossbert_full_training.md
+      - EWISER reproduction: examples/ewiser_reproduction.md
+      - EWISER training verification: examples/ewiser_benchmark.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
   - Datasets:
       - Overview: datasets/index.md

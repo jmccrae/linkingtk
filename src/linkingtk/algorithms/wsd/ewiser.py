@@ -16,7 +16,7 @@ shared output vector -- there's no gloss text involved in the forward pass
 at all. `EwiserEncoder.score(pairs)` still returns the same
 ``(len(pairs),) -> torch.Tensor`` shape
 [GlossBertEncoder.score][linkingtk.algorithms.wsd.glossbert.GlossBertEncoder.score]
-does (so [EwiserLinker.link][linkingtk.algorithms.wsd.ewiser.EwiserLinker.link]
+does (so [EwiserLinker][linkingtk.algorithms.wsd.ewiser.EwiserLinker]'s ``link()``
 can reuse the same blocking -> score -> group -> match pattern every
 linker in this package uses), but computes it very differently internally
 -- see `EwiserEncoder.score`'s own docstring.
