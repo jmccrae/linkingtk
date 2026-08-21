@@ -33,16 +33,31 @@ Confirmed by reading the reference's own model/criterion code directly
   FFN + the graph module); the encoder's weights come straight from a
   frozen `bert-large-cased`, loaded fresh from Hugging Face, not from the
   checkpoint.
-- Only the **final** BERT layer's hidden state matters, despite the
-  checkpoints' own recorded config listing 4 candidate layers
-  (`context_embeddings_layers=[-4,-3,-2,-1]`) -- confirmed
-  `context_embeddings_use_all_hidden=False` makes the model use only
-  `inner_states[-1]`, i.e. plain `last_hidden_state`.
-- Subword-to-word pooling uses this package's tokenizer's own fast
-  `word_ids()` alignment (`is_split_into_words=True`) rather than
-  reimplementing EWISER's bespoke subword-merging loop by hand -- an
-  equivalent mean-pool, expressed through infrastructure the tokenizer
-  already provides.
+- The encoder input is the **sum of the last 4 BERT hidden-state layers**
+  (`context_embeddings_layers=[-4,-3,-2,-1]`), not just
+  `last_hidden_state` -- despite every released checkpoint's own recorded
+  `context_embeddings_use_all_hidden=False`, which would suggest
+  otherwise. Confirmed this flag is dead: the reference's own
+  `TaggerModel.build_model` computes `use_all_hidden` from
+  `len(args.context_embeddings_type) > 1` (a variable-name mix-up --
+  `context_embeddings_type` is the string `"bert"`, not the actual layer
+  list), which for `"bert"` (length 4) is always `True`, unconditionally.
+  See `EwiserEncoder`'s own `num_summed_layers` docstring for how this was
+  traced.
+- Each whitespace-split word is subword-tokenized **in isolation** via a
+  from-scratch WordPiece implementation
+  ([wordpiece_tokenize_words][linkingtk.algorithms.wsd._ewiser_text.wordpiece_tokenize_words]),
+  not a single `tokenizer(words, is_split_into_words=True)` call --
+  confirmed, by tracing a real checkpoint-reproduction gap layer by layer
+  down to one divergent subtoken, that `is_split_into_words=True` still
+  runs BERT's punctuation-splitting pre-tokenizer on each word first
+  (splitting e.g. UFSAC's own single-token ``"Oct."`` into separate
+  ``"Oct"``/``"."`` pre-tokens before wordpiece), producing a *standalone*
+  ``"."`` token where EWISER's own reference (wordpiece-tokenizing the
+  literal string ``"Oct."`` directly, no pre-splitting) produces a
+  ``"##."`` continuation piece instead -- a different vocabulary entry
+  with an unrelated embedding. See `wordpiece_tokenize_words`'s own
+  docstring for the full diagnosis.
 - `EwiserEncoder.from_checkpoint` reads a checkpoint's own baked-in sparse
   WordNet adjacency directly from its state dict -- no graph construction
   needed for checkpoint-based inference (see
@@ -72,6 +87,7 @@ from linkingtk.algorithms.wsd._ewiser_text import (
     mention_sentence_and_span,
     whitespace_tokenize_with_offsets,
     word_index_for_span,
+    wordpiece_tokenize_words,
 )
 from linkingtk.algorithms.wsd._ewiser_vocab import SenseVocabulary
 from linkingtk.blocking.base import BlockingStrategy
@@ -113,6 +129,27 @@ class EwiserEncoder(nn.Module):
         dropout: Decoder dropout rate. Checkpoint loading doesn't restore
             this (dropout has no learned parameters), so it only affects
             `EwiserTrainer`-driven training.
+        num_summed_layers: The encoder input is the **sum** of the last
+            `num_summed_layers` BERT hidden-state layers, not just the
+            final layer -- confirmed against the reference's own
+            `TaggerModel.build_model`, whose ``use_all_hidden=len(layers)
+            > 1`` reads ``args.context_embeddings_type`` (a string, e.g.
+            ``"bert"``) where it evidently meant to read
+            ``args.context_embeddings_layers`` (the actual 4-entry layer
+            list) -- since ``len("bert") == 4 > 1`` regardless of the
+            real layer count, this makes ``use_all_hidden`` **always**
+            true for every BERT-backed checkpoint, silently overriding
+            the separate, correctly-named
+            ``context_embeddings_use_all_hidden`` config flag (which
+            reads `False` on all three released checkpoints and would,
+            if honored, sum only the single last layer). A reference
+            quirk, not a reference bug we get to ignore: it *is* what
+            these checkpoints were actually trained against, confirmed by
+            tracing a checkpoint-reproduction gap down to this exact
+            vector (norm ~82 summed vs. ~18 single-layer, cosine 0.69
+            apart -- unmistakably different vectors, not numerical noise).
+            Defaults to ``4``, matching every released checkpoint's own
+            ``context_embeddings_layers`` length.
         max_length: Maximum subword sequence length per sentence
             (truncated).
         forward_batch_size: Number of distinct sentences `score()` batches
@@ -135,6 +172,7 @@ class EwiserEncoder(nn.Module):
         structured_logits_renormalize: bool = False,
         freeze_encoder: bool = True,
         dropout: float = 0.1,
+        num_summed_layers: int = 4,
         max_length: int = 512,
         forward_batch_size: int = 16,
     ) -> None:
@@ -150,6 +188,7 @@ class EwiserEncoder(nn.Module):
             parameter.requires_grad = not freeze_encoder
 
         self.vocabulary = vocabulary
+        self.num_summed_layers = num_summed_layers
         self.max_length = max_length
         self.forward_batch_size = forward_batch_size
         self.decoder = EwiserDecoder(
@@ -244,6 +283,16 @@ class EwiserEncoder(nn.Module):
         from that sentence's shared output. A candidate whose sense id
         isn't in `vocabulary`, or a mention whose span doesn't resolve to
         a word position, scores ``-inf`` (never spuriously wins a match).
+
+        Each chunk's ``[num_words, len(vocabulary)]`` logits are consumed
+        (scores extracted) and released before the next chunk is encoded,
+        rather than holding every distinct sentence's full logits matrix
+        in memory for the whole call -- at `len(vocabulary)` ~117k, a
+        large evaluation set's worth of these held simultaneously
+        (thousands of sentences at once, e.g. UFSAC's "ALL" split) is
+        enough to exhaust even a 24GB GPU; confirmed by hitting exactly
+        that `CUDA out of memory` running `examples/ewiser_reproduction.py`
+        before this was fixed.
         """
         if not pairs:
             return torch.empty(0)
@@ -251,7 +300,8 @@ class EwiserEncoder(nn.Module):
         sentences: list[str] = []
         sentence_index: dict[str, int] = {}
         mention_word_index: dict[int, int | None] = {}
-        for mention, _sense in pairs:
+        pairs_by_sentence: dict[int, list[int]] = {}
+        for pair_index, (mention, _sense) in enumerate(pairs):
             text, start, end = mention_sentence_and_span(mention)
             if text not in sentence_index:
                 sentence_index[text] = len(sentences)
@@ -259,49 +309,58 @@ class EwiserEncoder(nn.Module):
             if id(mention) not in mention_word_index:
                 tokens = whitespace_tokenize_with_offsets(text)
                 mention_word_index[id(mention)] = word_index_for_span(tokens, start, end)
+            pairs_by_sentence.setdefault(sentence_index[text], []).append(pair_index)
 
-        all_logits = self._encode_sentences(sentences)
-
-        scores: list[torch.Tensor] = []
-        for mention, sense in pairs:
-            text, _start, _end = mention_sentence_and_span(mention)
-            logits = all_logits[sentence_index[text]]
-            word_index = mention_word_index[id(mention)]
-            sense_index = self.vocabulary.index_for(sense.id)
-            if word_index is None or sense_index is None:
-                scores.append(logits.new_tensor(float("-inf")))
-            else:
-                scores.append(logits[word_index, sense_index])
-        return torch.stack(scores)
-
-    def _encode_sentences(self, sentences: list[str]) -> list[torch.Tensor]:
-        results: list[torch.Tensor] = []
+        scores: list[torch.Tensor | None] = [None] * len(pairs)
         for start in range(0, len(sentences), self.forward_batch_size):
-            results.extend(self._encode_chunk(sentences[start : start + self.forward_batch_size]))
-        return results
+            chunk_sentences = sentences[start : start + self.forward_batch_size]
+            chunk_logits = self._encode_chunk(chunk_sentences)
+            for offset, logits in enumerate(chunk_logits):
+                for pair_index in pairs_by_sentence.get(start + offset, []):
+                    mention, sense = pairs[pair_index]
+                    word_index = mention_word_index[id(mention)]
+                    sense_index = self.vocabulary.index_for(sense.id)
+                    if word_index is None or sense_index is None:
+                        scores[pair_index] = logits.new_tensor(float("-inf"))
+                    else:
+                        scores[pair_index] = logits[word_index, sense_index]
+
+        assert all(score is not None for score in scores)  # every pair index was filled above
+        return torch.stack(scores)  # type: ignore[arg-type]
 
     def _encode_chunk(self, sentences: list[str]) -> list[torch.Tensor]:
         device = next(self.parameters()).device
         words_per_sentence = [
             [word for word, _s, _e in whitespace_tokenize_with_offsets(text)] for text in sentences
         ]
-        encoding = self.tokenizer(
-            words_per_sentence,
-            is_split_into_words=True,
-            padding=True,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-        ).to(device)
+        tokenized = [
+            wordpiece_tokenize_words(self.tokenizer, words) for words in words_per_sentence
+        ]
+        # Truncate tokens/word_ids together so a truncated sentence's last
+        # kept subtoken still has a matching word_ids entry.
+        token_lists = [tokens[: self.max_length] for tokens, _word_ids in tokenized]
+        word_ids_batch: list[list[int | None]] = [
+            word_ids[: self.max_length] for _tokens, word_ids in tokenized
+        ]
+        max_len = max(len(tokens) for tokens in token_lists)
+        pad_id = self.tokenizer.pad_token_id
+        input_ids = torch.full((len(sentences), max_len), pad_id, dtype=torch.long)
+        attention_mask = torch.zeros((len(sentences), max_len), dtype=torch.long)
+        for row, tokens in enumerate(token_lists):
+            ids = [self.tokenizer.convert_tokens_to_ids(token) for token in tokens]
+            input_ids[row, : len(ids)] = torch.tensor(ids, dtype=torch.long)
+            attention_mask[row, : len(ids)] = 1
+        input_ids = input_ids.to(device)
+        attention_mask = attention_mask.to(device)
 
         self.encoder.eval()  # EWISER's own encoder is always frozen+eval, even mid-training
         with torch.set_grad_enabled(not self.freeze_encoder):
-            hidden = self.encoder(
-                input_ids=encoding["input_ids"], attention_mask=encoding["attention_mask"]
-            ).last_hidden_state
+            hidden_states = self.encoder(
+                input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True
+            ).hidden_states
+        hidden = torch.stack(hidden_states[-self.num_summed_layers :], dim=0).sum(0)
 
         num_words = [len(words) for words in words_per_sentence]
-        word_ids_batch = [encoding.word_ids(batch_index=i) for i in range(len(sentences))]
         pooled = mean_pool_subwords(hidden, word_ids_batch, num_words)
         return [self.decoder(vectors.unsqueeze(0)).squeeze(0) for vectors in pooled]
 

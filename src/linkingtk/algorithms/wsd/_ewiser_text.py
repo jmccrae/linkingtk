@@ -4,15 +4,22 @@ EWISER classifies one vector per whitespace word (mean-pooled from BERT
 subwords), unlike
 [GlossBertEncoder][linkingtk.algorithms.wsd.glossbert.GlossBertEncoder],
 which never needs word-level positions. These helpers resolve a mention's
-character span to a word index and pool subword hidden states back up to
-that word level.
+character span to a word index, subword-tokenize each whitespace word in
+isolation (see `wordpiece_tokenize_words`'s docstring for why this can't
+just be a high-level tokenizer call), and pool subword hidden states back
+up to word level.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 
 from linkingtk.core.entity import Entity, label_texts
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 
 def whitespace_tokenize_with_offsets(text: str) -> list[tuple[str, int, int]]:
@@ -68,6 +75,78 @@ def mention_sentence_and_span(entity: Entity) -> tuple[str, int, int]:
         return context
     text = context if isinstance(context, str) else " ".join(label_texts(entity))
     return text, 0, len(text)
+
+
+def _wordpiece_tokenize_one_word(
+    word: str, vocab: dict[str, int], unk_token: str, max_chars: int = 200
+) -> list[str]:
+    """BERT's standard greedy-longest-match WordPiece algorithm, applied to
+    one already-segmented word (no further splitting -- see
+    `wordpiece_tokenize_words`)."""
+    if len(word) > max_chars:
+        return [unk_token]
+    tokens: list[str] = []
+    start = 0
+    while start < len(word):
+        end = len(word)
+        piece = None
+        while start < end:
+            candidate = word[start:end]
+            if start > 0:
+                candidate = "##" + candidate
+            if candidate in vocab:
+                piece = candidate
+                break
+            end -= 1
+        if piece is None:
+            return [unk_token]
+        tokens.append(piece)
+        start = end
+    return tokens
+
+
+def wordpiece_tokenize_words(
+    tokenizer: PreTrainedTokenizerBase, words: list[str]
+) -> tuple[list[str], list[int | None]]:
+    """Subword-tokenize each whitespace `words` entry in isolation, returning
+    ``([CLS] + subwords + [SEP], word_ids)`` (`word_ids[t]` is the index into
+    `words` subtoken `t` came from, `None` for `[CLS]`/`[SEP]`).
+
+    Deliberately **not** ``tokenizer(words, is_split_into_words=True)``:
+    that high-level call still runs BERT's own punctuation-splitting
+    pre-tokenizer on each provided "word" before wordpiece, so a word
+    containing internal punctuation (e.g. UFSAC's own single-token
+    ``"Oct."``) gets split into two independent pre-tokens (``"Oct"``,
+    ``"."``) before wordpiece ever runs, producing a *standalone* ``"."``
+    token -- not the ``"##."`` continuation-piece EWISER's own
+    reference produces by wordpiece-tokenizing the literal string
+    ``"Oct."`` directly, with no pre-splitting step at all. Confirmed
+    directly: this single-token divergence (`"."` vs `"##."` are
+    different vocabulary entries with unrelated embeddings) was traced,
+    layer by layer, as the exact source of a checkpoint-reproduction gap
+    against EWISER's own published numbers -- affects any UFSAC word with
+    internal punctuation (abbreviations like "Oct."/"Sept.", likely also
+    "U.S.", possessives, etc.), a small fraction of tokens but enough to
+    measurably shift results once fed through the checkpoint's own
+    BatchNorm (calibrated tightly enough to the reference's exact
+    activations that even one wrong subtoken's ripple through attention
+    measurably shifts other positions' representations).
+
+    Implements BERT's WordPiece algorithm directly (greedy longest-match
+    against the tokenizer's own vocab) rather than depending on any
+    tokenizer-internal ``wordpiece_tokenizer`` attribute -- not exposed by
+    every `transformers` version/backend.
+    """
+    vocab = tokenizer.get_vocab()
+    unk_token = tokenizer.unk_token
+    subwords: list[str] = []
+    word_ids: list[int | None] = []
+    for word_index, word in enumerate(words):
+        for piece in _wordpiece_tokenize_one_word(word, vocab, unk_token):
+            subwords.append(piece)
+            word_ids.append(word_index)
+    tokens = [tokenizer.cls_token, *subwords, tokenizer.sep_token]
+    return tokens, [None, *word_ids, None]
 
 
 def mean_pool_subwords(

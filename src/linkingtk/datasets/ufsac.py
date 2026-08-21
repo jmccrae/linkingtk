@@ -82,24 +82,42 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
     cross-checking against their own ``Scorer.java``), falling back to a
     positional ``ufsac:{document}:{sentence}:{index}`` id for corpora that
     don't carry one (e.g. UFSAC's own non-Raganato ``semcor.xml``).
+
+    Each mention also carries its word's own Penn Treebank ``pos`` tag
+    (e.g. ``"NN"``, ``"VBD"``) as ``properties["pos"]`` when present --
+    unused by [GlossBertLinker][linkingtk.algorithms.wsd.glossbert.GlossBertLinker]
+    (whose own paper deliberately doesn't restrict candidates by POS), but
+    needed to replicate
+    [EwiserLinker][linkingtk.algorithms.wsd.ewiser.EwiserLinker]'s
+    reference's own candidate generation, which restricts each mention to
+    its tagged part of speech's senses (confirmed directly against
+    ``ewiser/fairseq_ext/data/wsd_dataset.py``'s ``lemma_pos_to_possible_senses``).
     """
     mentions: list[Entity] = []
     ground_truth: list[tuple[str, str]] = []
     doc_id = ""
     sent_id = ""
     sent_index = 0
-    words: list[tuple[str, str, list[str], str | None]] = []
+    words: list[tuple[str, str, list[str], str | None, str | None]] = []
 
     def flush_sentence() -> None:
-        text = " ".join(surface for surface, _lemma, _keys, _id in words)
+        text = " ".join(surface for surface, _lemma, _keys, _id, _pos in words)
         offset = 0
-        for index, (surface, lemma, sense_keys, instance_id) in enumerate(words):
+        for index, (surface, lemma, sense_keys, instance_id, pos) in enumerate(words):
             start = offset
             end = offset + len(surface)
             offset = end + 1
             if sense_keys:
                 mention_id = instance_id or f"ufsac:{doc_id}:{sent_id}:{index}"
-                mentions.append(Entity(id=mention_id, labels=[lemma], context=(text, start, end)))
+                properties = {"pos": pos} if pos else {}
+                mentions.append(
+                    Entity(
+                        id=mention_id,
+                        labels=[lemma],
+                        context=(text, start, end),
+                        properties=properties,
+                    )
+                )
                 ground_truth.extend((mention_id, sense_key) for sense_key in sense_keys)
         words.clear()
 
@@ -113,7 +131,15 @@ def _parse(data: bytes) -> tuple[list[Entity], list[tuple[str, str]]]:
             surface = elem.get("surface_form", "")
             lemma = elem.get("lemma", surface)
             key_attr = elem.get("wn30_key")
-            words.append((surface, lemma, key_attr.split(";") if key_attr else [], elem.get("id")))
+            words.append(
+                (
+                    surface,
+                    lemma,
+                    key_attr.split(";") if key_attr else [],
+                    elem.get("id"),
+                    elem.get("pos"),
+                )
+            )
             elem.clear()
         elif event == "end" and elem.tag == "sentence":
             flush_sentence()

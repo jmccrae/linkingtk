@@ -137,6 +137,24 @@ class TestLoad:
         assert "group" not in {m.labels[0] for m in mentions}
         assert "ufsac:d001:s1:1" not in dict(ground_truth)
 
+    def test_pos_attribute_becomes_a_property(self, fixture_source: str) -> None:
+        mentions, _senses, _gt = UfsacDataset(source=fixture_source).load()
+
+        group_mention = next(m for m in mentions if m.labels == ["group"])
+        met_mention = next(m for m in mentions if m.labels == ["meet"])
+        assert group_mention.properties["pos"] == "NN"
+        assert met_mention.properties["pos"] == "VBD"
+
+    def test_missing_pos_attribute_leaves_properties_empty(self, tmp_path: Path) -> None:
+        xml = _XML.replace(' pos="NN"', "")
+        path = tmp_path / "corpus.xml"
+        path.write_text(xml)
+
+        mentions, _senses, _gt = UfsacDataset(source=str(path)).load()
+
+        group_mention = next(m for m in mentions if m.labels == ["group"])
+        assert group_mention.properties == {}
+
     def test_lexicon_is_forwarded_to_the_entity_source(self, fixture_source: str) -> None:
         _mentions, senses, _gt = UfsacDataset(source=fixture_source, lexicon="omw-en:2.0").load()
 
