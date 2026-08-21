@@ -9,13 +9,23 @@ gate for issue #40), this script has no such bar: EWISER's own published
 results critically depend on initializing the output layer
 (`decoder.logits.weight`) from externally pretrained LMMS/SensEmBERT
 sense embeddings (Section 3.4 of the paper) -- vectors this package
-doesn't bundle or reproduce. From-scratch training here starts that layer
-randomly, and trains on a small `_TRAIN_DOCS`-document slice of SemCor for
-a handful of epochs, not the full corpus. This exists to verify the
-*training path itself* -- `EwiserTrainer`'s cross-entropy loss,
-per-sentence batching, and freeze/unfreeze schedule all work correctly on
-real data and a real pretrained encoder -- not to reproduce the paper's
-numbers.
+doesn't bundle or reproduce (tracked separately, issue #57). From-scratch
+training here starts that layer randomly, and trains on a small
+`_TRAIN_DOCS`-document slice of SemCor for a handful of epochs, not the
+full corpus. This exists to verify the *training path itself* --
+`EwiserTrainer`'s cross-entropy loss, per-sentence batching, and
+freeze/unfreeze schedule all work correctly on real data and a real
+pretrained encoder -- not to reproduce the paper's numbers.
+
+This *does* wire up EWISER's own distinguishing idea -- the WordNet
+relation-graph propagation step (`build_relation_adjacency`), unlike an
+earlier version of this script which trained a plain frozen-BERT + FFN
+classifier with no graph at all. Its practical benefit here is still
+capped by the restricted vocabulary (see below): structured logits exist
+to let the model score synsets it never saw labeled in training, by
+propagating from labeled *neighbors* -- but every neighbor this graph can
+reach is, by construction, already a labeled vocabulary entry, so there's
+no truly-unseen synset for it to generalize to in this setup.
 
 Also exercises the freeze-then-thaw schedule end to end on real data
 (`freeze_output_epochs=1`): `decoder.logits.weight` starts frozen for the
@@ -35,6 +45,7 @@ from pathlib import Path
 
 import torch
 
+from linkingtk.algorithms.wsd._ewiser_graph import build_relation_adjacency
 from linkingtk.algorithms.wsd._ewiser_vocab import SenseVocabulary
 from linkingtk.algorithms.wsd.ewiser import EwiserEncoder, EwiserLinker
 from linkingtk.blocking.exact import ExactMatch
@@ -93,8 +104,24 @@ def main() -> None:
     vocabulary = SenseVocabulary.from_wn([synset_id for _mid, synset_id in train_gt + eval_gt])
     print(f"Vocabulary size: {len(vocabulary)}")
 
+    # Wires up EWISER's own distinguishing idea -- the WordNet
+    # graph-propagation step -- so this benchmark actually exercises it,
+    # not just a plain frozen-BERT + FFN classifier. Built from this
+    # restricted vocabulary (see the comment above), so its practical
+    # benefit here is capped: structured logits exist to let the model
+    # score synsets it never saw labeled by propagating from labeled
+    # neighbors, but every neighbor this graph can reach is, by
+    # construction, already a labeled vocabulary entry.
+    adjacency = build_relation_adjacency(vocabulary)
+    print(f"Relation graph edges: {adjacency.values().numel()}")
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    encoder = EwiserEncoder(model_name_or_path=_MODEL_NAME, vocabulary=vocabulary, max_length=128)
+    encoder = EwiserEncoder(
+        model_name_or_path=_MODEL_NAME,
+        vocabulary=vocabulary,
+        adjacency=adjacency,
+        max_length=128,
+    )
     encoder.to(device)
     linker = EwiserLinker(encoder)
 
