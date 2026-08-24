@@ -96,6 +96,12 @@
 
 ::: linkingtk.algorithms.wsd._ewiser_text
 
+### ESC
+
+::: linkingtk.algorithms.wsd.esc
+
+::: linkingtk.algorithms.wsd._esc_text
+
 ## Word Sense Alignment
 
 ::: linkingtk.algorithms.wsa

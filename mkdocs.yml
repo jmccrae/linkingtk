@@ -43,6 +43,8 @@ nav:
       - GlossBERT full-corpus training: examples/glossbert_full_training.md
       - EWISER reproduction: examples/ewiser_reproduction.md
       - EWISER training verification: examples/ewiser_benchmark.md
+      - ESC reproduction: examples/esc_reproduction.md
+      - ESC training verification: examples/esc_benchmark.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
   - Datasets:
       - Overview: datasets/index.md
