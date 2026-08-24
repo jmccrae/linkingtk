@@ -32,6 +32,7 @@ from linkingtk.datasets.wordnet_wikidata import (
     WordNetWikidataOrganismsDataset,
     WordNetWikidataOrganismsHardDataset,
 )
+from linkingtk.datasets.zeshel import ZeshelDataset
 
 __all__ = [
     "DatasetLoader",
@@ -61,4 +62,5 @@ __all__ = [
     "WordNetWikidataOrganismsHardDataset",
     "SemCorDataset",
     "UfsacDataset",
+    "ZeshelDataset",
 ]

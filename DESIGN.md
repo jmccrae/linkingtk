@@ -243,7 +243,8 @@ Toy datasets:
 - AIDA-CoNLL: This has some questionable licensing... technically it is not 
    available but it is easy to find in fact
 - TAC KBP:
-- ZESHEL: 
+- ZESHEL: implemented, `linkingtk.datasets.zeshel.ZeshelDataset` (via the
+   `naist-nlp/zeshel` Hugging Face Hub mirror)
 - DaMuEL: https://lindat.mff.cuni.cz/repository/items/10e1cc03-b24b-4e41-9df9-b0fe4324ccbe
 - LCQuAD 2.0: https://figshare.com/projects/LCQuAD_2_0/62270
 
