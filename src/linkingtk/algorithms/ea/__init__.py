@@ -6,6 +6,7 @@ a supporting graph is normally available. See DESIGN.md for references
 (OpenEA, Simple-HHEA, ChatEA, ProLEA, EntMatcher).
 """
 
+from linkingtk.algorithms.ea.alinet import AliNetLinker
 from linkingtk.algorithms.ea.attre import AttrELinker
 from linkingtk.algorithms.ea.bootea import BootEALinker
 from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
@@ -22,6 +23,7 @@ from linkingtk.algorithms.ea.rsn4ea import RSN4EALinker
 from linkingtk.algorithms.ea.sea import SEALinker
 
 __all__ = [
+    "AliNetLinker",
     "AttrELinker",
     "BootEALinker",
     "EntMatcherLinker",
