@@ -17,6 +17,7 @@ from linkingtk.algorithms.ea.kdcoe import KDCoELinker
 from linkingtk.algorithms.ea.kge import KGELinker
 from linkingtk.algorithms.ea.mtranse import MTransELinker
 from linkingtk.algorithms.ea.multike import MultiKELinker
+from linkingtk.algorithms.ea.rdgcn import RDGCNLinker
 from linkingtk.algorithms.ea.rsn4ea import RSN4EALinker
 from linkingtk.algorithms.ea.sea import SEALinker
 
@@ -32,6 +33,7 @@ __all__ = [
     "KGELinker",
     "MTransELinker",
     "MultiKELinker",
+    "RDGCNLinker",
     "RSN4EALinker",
     "SEALinker",
 ]
