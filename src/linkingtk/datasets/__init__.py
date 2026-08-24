@@ -11,6 +11,7 @@ from linkingtk.datasets.base import DatasetLoader, GraphDatasetLoader
 from linkingtk.datasets.damuel import DamuelDataset
 from linkingtk.datasets.dbp15k import DBP15KFrEnDataset, DBP15KJaEnDataset, DBP15KZhEnDataset
 from linkingtk.datasets.icews import IcewsWikiDataset
+from linkingtk.datasets.lcquad2 import Lcquad2Dataset
 from linkingtk.datasets.naisc import AnatomyDataset, ConferenceDataset
 from linkingtk.datasets.openea import (
     DbpediaWikidata15KDataset,
@@ -58,6 +59,7 @@ __all__ = [
     "DbpediaWikidata15KAttrDataset",
     "DbpediaYago15KAttrDataset",
     "IcewsWikiDataset",
+    "Lcquad2Dataset",
     "WordNetWikidataLanguagesDataset",
     "WordNetWikidataLocationsDataset",
     "WordNetWikidataOrganismsDataset",

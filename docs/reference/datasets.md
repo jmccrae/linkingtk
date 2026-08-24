@@ -44,6 +44,10 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 
 ::: linkingtk.datasets.damuel
 
+## LCQuAD 2.0
+
+::: linkingtk.datasets.lcquad2
+
 ## SemCor
 
 ::: linkingtk.datasets.semcor

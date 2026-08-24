@@ -255,7 +255,15 @@ Toy datasets:
    language (278MB-26.3GB), each an uncompressed tar of 500 shuffled
    xz-compressed JSON-Lines shards -- streamed and sampled (`max_parts`),
    never fully downloaded.
-- LCQuAD 2.0: https://figshare.com/projects/LCQuAD_2_0/62270
+- LCQuAD 2.0: https://figshare.com/projects/LCQuAD_2_0/62270 --
+   implemented, `linkingtk.datasets.lcquad2.Lcquad2Dataset`. Two public
+   figshare JSON files (train/test, no native validation split); the
+   release has no entity-mention span annotations, so mentions are
+   derived by matching each SPARQL query's `wd:Qxxx` references' live
+   Wikidata labels against the question text (~81% resolve, measured on a
+   real sample; the rest are skipped, same convention as AIDA-CoNLL's NIL
+   mentions). KB entity labels/descriptions are fetched live from
+   Wikidata (`wbgetentities`, batched + disk-cached + retried).
 
 ### Word Sense Disambiguation Datasets
 
