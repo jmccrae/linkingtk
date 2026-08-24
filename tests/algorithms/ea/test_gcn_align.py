@@ -25,6 +25,13 @@ _GRAPH = [
 ]
 _GROUND_TRUTH = [("kg1:a", "kg2:w"), ("kg1:b", "kg2:x"), ("kg1:c", "kg2:y"), ("kg1:d", "kg2:z")]
 
+_ATTR1 = [(e.id, "http://example.org/type", "Thing") for e in _KG1] + [
+    ("kg1:a", "http://example.org/special", "yes")
+]
+_ATTR2 = [(e.id, "http://example.org/type", "Thing") for e in _KG2] + [
+    ("kg2:w", "http://example.org/special", "yes")
+]
+
 
 class _AllPairs(BlockingStrategy):
     """Blocking strategy that lets every pair through -- entities here don't
@@ -90,6 +97,79 @@ class TestFitAndLink:
 
         report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
         assert report.metrics["precision@1"] == 1.0
+
+
+class TestAttributeBranch:
+    def test_recovers_seeded_alignment_with_attributes(self) -> None:
+        linker = GCNAlignLinker(
+            embedding_dim=16,
+            attr_dim=16,
+            num_epochs=300,
+            learning_rate=0.5,
+            neg_triple_num=3,
+            use_attributes=True,
+            attr_top_fraction=1.0,
+        )
+        linker.fit(
+            _KG1,
+            _KG2,
+            _GROUND_TRUTH,
+            graph=_GRAPH,
+            random_state=0,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+        )
+
+        results = linker.link(_KG1, _KG2, blocking=_AllPairs())
+        predictions = [(r.source_id, r.target_id) for r in results]
+
+        report = Evaluator.evaluate(predictions=predictions, ground_truth=_GROUND_TRUTH)
+        assert report.metrics["precision@1"] == 1.0
+
+    def test_combined_embedding_is_wider_than_structural_only(self) -> None:
+        linker = GCNAlignLinker(
+            embedding_dim=16,
+            attr_dim=8,
+            num_epochs=20,
+            learning_rate=0.5,
+            use_attributes=True,
+            attr_top_fraction=1.0,
+        )
+        linker.fit(
+            _KG1,
+            _KG2,
+            _GROUND_TRUTH,
+            graph=_GRAPH,
+            random_state=0,
+            attribute_triples1=_ATTR1,
+            attribute_triples2=_ATTR2,
+        )
+
+        vector = linker.source_embedding(_KG1[0].id)
+        assert vector.shape == (16 + 8,)
+
+
+class TestAttributeBranchErrors:
+    def test_missing_attribute_triples_raises(self) -> None:
+        linker = GCNAlignLinker(use_attributes=True)
+        with pytest.raises(LinkingTKError, match="attribute_triples"):
+            linker.fit(_KG1, _KG2, _GROUND_TRUTH, graph=_GRAPH, random_state=0)
+
+    def test_top_fraction_rounding_to_zero_attrs_raises(self) -> None:
+        # A single distinct predicate at the default top_fraction=0.7
+        # rounds down to zero kept columns -- nothing to train with.
+        linker = GCNAlignLinker(use_attributes=True)
+        attrs1 = [(e.id, "http://example.org/type", "Thing") for e in _KG1]
+        with pytest.raises(LinkingTKError, match="no attribute predicate"):
+            linker.fit(
+                _KG1,
+                _KG2,
+                _GROUND_TRUTH,
+                graph=_GRAPH,
+                random_state=0,
+                attribute_triples1=attrs1,
+                attribute_triples2=[],
+            )
 
 
 class TestErrors:

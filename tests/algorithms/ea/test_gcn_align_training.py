@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from linkingtk.algorithms.ea._gcn_align_training import (
+    build_attribute_features,
     build_weighted_adjacency,
     compute_relation_functionality,
     sample_negatives,
@@ -128,3 +129,73 @@ class TestSampleNegatives:
         assert neg_right.max() < 5
         assert neg2_left.min() >= 0
         assert neg2_left.max() < 5
+
+
+class TestBuildAttributeFeatures:
+    def test_entity_gets_column_for_its_predicate(self) -> None:
+        entity_to_id = {"kg1:a": 0, "kg1:b": 1, "kg2:w": 2}
+        attrs1 = [
+            ("kg1:a", "http://dbpedia.org/ontology/birthDate", "1990-01-01"),
+            ("kg1:b", "http://dbpedia.org/ontology/birthDate", "1985-01-01"),
+        ]
+        attrs2: list[tuple[str, str, str]] = []
+
+        # top_fraction=1.0 keeps this deterministic -- see
+        # test_small_vocabulary_rounds_down_to_zero_attributes for the
+        # default 0.7's rounding behavior on a tiny vocabulary.
+        indices, values, num_attrs = build_attribute_features(
+            attrs1, attrs2, entity_to_id, top_fraction=1.0
+        )
+
+        assert num_attrs == 1
+        pairs = {(int(indices[0, i]), int(indices[1, i])) for i in range(indices.shape[1])}
+        assert (0, 0) in pairs
+        assert (1, 0) in pairs
+        assert np.all(values == 1.0)
+
+    def test_small_vocabulary_rounds_down_to_zero_attributes(self) -> None:
+        # A real, faithfully-ported OpenEA quirk: int(0.7 * len(predicates))
+        # rounds down, so a vocabulary of a single predicate keeps zero
+        # feature columns at the default top_fraction.
+        entity_to_id = {"kg1:a": 0}
+        attrs1 = [("kg1:a", "http://example.org/p", "v")]
+
+        _indices, _values, num_attrs = build_attribute_features(attrs1, [], entity_to_id)
+
+        assert num_attrs == 0
+
+    def test_low_frequency_predicate_dropped_by_top_fraction(self) -> None:
+        # 10 distinct predicates -> top_fraction=0.5 keeps only the 5 most
+        # frequent (by distinct-entity count). 9 predicates each have
+        # frequency 2 (shared with a filler entity); the 10th ("rare_only"'s
+        # only predicate) has frequency 1, strictly below all 9 -- so it's
+        # dropped regardless of tie-breaking among the frequency-2 group.
+        entity_to_id = {"common": 0, "rare_only": 1}
+        entity_to_id.update({f"filler{i}": i + 2 for i in range(9)})
+        attrs1 = [("common", f"http://example.org/p{p}", "v") for p in range(9)]
+        attrs1 += [(f"filler{p}", f"http://example.org/p{p}", "v") for p in range(9)]
+        attrs1.append(("rare_only", "http://example.org/p_rare", "v"))
+
+        indices, _values, num_attrs = build_attribute_features(
+            attrs1, [], entity_to_id, top_fraction=0.5
+        )
+
+        assert num_attrs == 5
+        rare_only_id = entity_to_id["rare_only"]
+        rare_only_columns = indices[1][indices[0] == rare_only_id]
+        assert len(rare_only_columns) == 0
+
+    def test_entity_not_in_entity_to_id_is_dropped(self) -> None:
+        entity_to_id = {"kg1:a": 0}
+        attrs1 = [("kg1:unknown", "http://example.org/p", "v")]
+
+        indices, values, _num_attrs = build_attribute_features(attrs1, [], entity_to_id)
+
+        assert indices.shape == (2, 0)
+        assert values.shape == (0,)
+
+    def test_no_attribute_triples_gives_zero_attributes(self) -> None:
+        indices, values, num_attrs = build_attribute_features([], [], {"kg1:a": 0})
+        assert num_attrs == 0
+        assert indices.shape == (2, 0)
+        assert values.shape == (0,)

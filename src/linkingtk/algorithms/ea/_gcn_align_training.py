@@ -3,15 +3,16 @@
 
 Ported from OpenEA's reference implementation
 (https://github.com/nju-websoft/OpenEA -- ``approaches/gcn_align.py``'s
-``GCN_Utils.func``/``ifunc``/``get_weighted_adj`` and
-``GCN_Align.train_embeddings``'s uniform negative-sampling arrays).
-Independently testable without ``torch`` installed -- see
-``_gcn_align_torch.py`` for the model/training-step functions.
+``GCN_Utils.func``/``ifunc``/``get_weighted_adj``,
+``GCN_Align.train_embeddings``'s uniform negative-sampling arrays, and
+``load_attr`` for the attribute-presence feature matrix). Independently
+testable without ``torch`` installed -- see ``_gcn_align_torch.py`` for
+the model/training-step functions.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -19,7 +20,10 @@ import numpy as np
 if TYPE_CHECKING:
     import numpy.typing as npt
 
+    from linkingtk.utils.graph import Triple
+
 _DEFAULT_MIN_WEIGHT = 0.3
+_DEFAULT_TOP_FRACTION = 0.7
 
 
 def compute_relation_functionality(
@@ -141,3 +145,80 @@ def sample_negatives(
     neg2_left = rng.integers(0, num_entities, size=len(left) * k, dtype=np.int64)
     neg2_right = np.repeat(right, k)
     return neg_left, neg_right, neg2_left, neg2_right
+
+
+def build_attribute_features(
+    attribute_triples1: list[Triple],
+    attribute_triples2: list[Triple],
+    entity_to_id: dict[str, int],
+    top_fraction: float = _DEFAULT_TOP_FRACTION,
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64], int]:
+    """One-hot attribute-*predicate*-presence features, per OpenEA's ``load_attr``.
+
+    Ports ``load_attr`` exactly: the feature vocabulary is the top
+    ``top_fraction`` (by how many distinct entities carry each predicate,
+    combined across both KGs) attribute *predicates* -- not values, since
+    ``load_attr`` reads its input from ``entity_attributes_dict`` (entity
+    -> set of predicate URIs that entity has an attribute triple for),
+    discarding literal values entirely. An entity gets feature ``1.0`` at
+    a predicate's column iff it has at least one attribute triple with
+    that predicate; the specific value(s) never matter. Predicates outside
+    the top ``top_fraction`` are dropped (contribute no feature column at
+    all, not folded into an "other" bucket), matching OpenEA's own
+    ``if v in attr2id`` guard.
+
+    Args:
+        attribute_triples1: KG1's ``(entity_id, predicate, value)``
+            triples, e.g. from
+            [_OpenEANativeDataset.load_attribute_triples][linkingtk.datasets.openea_native._OpenEANativeDataset.load_attribute_triples].
+        attribute_triples2: KG2's own attribute triples.
+        entity_to_id: Combined entity label -> id mapping, e.g. from
+            [build_id_mappings][linkingtk.utils.graph.build_id_mappings].
+            Triples whose entity id isn't a key here are dropped.
+        top_fraction: Fraction of the combined, frequency-ranked predicate
+            vocabulary to keep as feature columns. OpenEA's own value
+            (hardcoded, not configurable in the reference) is ``0.7``.
+
+    Returns:
+        ``(indices, values, num_attributes)``: ``indices`` is ``(2, nnz)``
+        int64 (row 0 = entity id, row 1 = attribute-column id -- ready for
+        [normalize_adjacency_coo][linkingtk.utils.sparse_gcn.normalize_adjacency_coo]-free
+        use directly via
+        [coo_to_torch_sparse][linkingtk.utils.sparse_gcn.coo_to_torch_sparse]
+        with ``size=(num_entities, num_attributes)``), ``values`` is
+        ``(nnz,)`` float64 (always ``1.0``), ``num_attributes`` is the
+        feature vocabulary size (``0`` if there are no attribute triples
+        at all).
+    """
+    predicates_by_entity: dict[str, set[str]] = defaultdict(set)
+    for entity_id, predicate, _value in attribute_triples1 + attribute_triples2:
+        predicates_by_entity[entity_id].add(predicate)
+
+    counts: Counter[str] = Counter()
+    for predicates in predicates_by_entity.values():
+        counts.update(predicates)
+
+    ranked_predicates = [predicate for predicate, _count in counts.most_common()]
+    num_attributes = int(top_fraction * len(ranked_predicates))
+    predicate_to_id = {
+        predicate: i for i, predicate in enumerate(ranked_predicates[:num_attributes])
+    }
+
+    rows: list[int] = []
+    cols: list[int] = []
+    for entity_id, predicates in predicates_by_entity.items():
+        row = entity_to_id.get(entity_id)
+        if row is None:
+            continue
+        for predicate in predicates:
+            col = predicate_to_id.get(predicate)
+            if col is not None:
+                rows.append(row)
+                cols.append(col)
+
+    if not rows:
+        return np.empty((2, 0), dtype=np.int64), np.empty(0, dtype=np.float64), num_attributes
+
+    indices = np.array([rows, cols], dtype=np.int64)
+    values = np.ones(len(rows), dtype=np.float64)
+    return indices, values, num_attributes

@@ -7,33 +7,38 @@ https://aclanthology.org/D18-1032/
 The first GNN-based EA linker in this package (see #18's parent issue and
 DESIGN.md's Entity Alignment references) -- unlike every linker in
 ``linkingtk.algorithms.ea`` so far, entity representations come from
-propagating a learnable per-entity embedding table through a fixed graph
-convolution over the combined relational structure, not from a triple-local
-translational/distance loss over embeddings directly. This is a faithful
-port of OpenEA's reference implementation
+propagating embeddings through a fixed graph convolution over the combined
+relational structure, not from a triple-local translational/distance loss
+over embeddings directly. This is a faithful port of OpenEA's reference
+implementation
 (https://github.com/nju-websoft/OpenEA/blob/master/src/openea/approaches/gcn_align.py),
 not a from-scratch reading of the paper, following this repo's established
 convention (e.g. [MTransELinker][linkingtk.algorithms.ea.mtranse.MTransELinker],
-[RSN4EALinker][linkingtk.algorithms.ea.rsn4ea.RSN4EALinker]). Deliberate
-deviations, confirmed against OpenEA's own reference config
+[RSN4EALinker][linkingtk.algorithms.ea.rsn4ea.RSN4EALinker]).
+
+**Both of OpenEA's branches are implemented**: the structural (``se``)
+branch propagates a directly-learnable per-entity embedding table; the
+attribute (``ae``) branch propagates a learned transform of each entity's
+one-hot attribute-*predicate*-presence vector (see
+[build_attribute_features][linkingtk.algorithms.ea._gcn_align_training.build_attribute_features]
+for why predicates, not values). Both are 2-layer GCNs over the *same*
+structural adjacency, trained independently (separate optimizers, never a
+combined loss) with the *same* shared negatives each step, matching
+OpenEA's own ``GCN_Align.train_embeddings``. At evaluation time (and for
+early-stopping/final embeddings), scores use the concatenation
+``[se * beta, ae * (1 - beta)]`` -- OpenEA's own ``test_method: "sa"``,
+the config that produced the published EN-FR-15K-V1 numbers.
+``use_attributes=False`` (default) skips the ``ae`` branch entirely,
+needing nothing beyond [EnFr15KDataset][linkingtk.datasets.EnFr15KDataset]'s
+plain relational triples -- pass ``use_attributes=True`` plus
+[EnFr15KAttrDataset][linkingtk.datasets.EnFr15KAttrDataset]'s attribute
+triples to `fit()` for numbers directly comparable to OpenEA's published
+Hits@1=0.338, Hits@10=0.680, MRR=0.451
+(``docs/detailed_results_current_approaches_15K.csv``).
+
+Deliberate deviations, confirmed against OpenEA's own reference config
 (``run/args/gcnalign_args_15K.json``) and source:
 
-- **Structural (``se``) branch only -- the attribute (``ae``) branch is not
-  implemented.** OpenEA's own model trains two independent 2-layer GCNs (one
-  over the relational structure, one over a one-hot attribute-presence
-  matrix built from attribute triples) and, at evaluation time, scores pairs
-  against a concatenation ``[se * beta, ae * (1 - beta)]``. This linker only
-  ports the structural branch, which needs nothing beyond
-  [EnFr15KDataset][linkingtk.datasets.EnFr15KDataset]'s plain relational
-  triples. **This means the published EN-FR-15K-V1 numbers
-  (Hits@1=0.338, Hits@10=0.680, MRR=0.451, from
-  ``docs/detailed_results_current_approaches_15K.csv``) do not directly
-  apply here** -- that config uses ``test_method: "sa"`` (the combined
-  embedding), not structural-only, so this port should be expected to score
-  lower. Adding the attribute branch (needing
-  [EnFr15KAttrDataset][linkingtk.datasets.EnFr15KAttrDataset]'s attribute
-  triples, mirroring the ``ae``-branch GCN and the ``beta``-weighted
-  concatenation) is a natural follow-up, not implemented here.
 - **Plain SGD, not Adam/Adagrad.** OpenEA's own ``GCN_Align_Unit`` uses
   ``tf.train.GradientDescentOptimizer`` and asserts
   ``args.learning_rate >= 0.01`` -- its own published value is an unusually
@@ -49,6 +54,25 @@ deviations, confirmed against OpenEA's own reference config
   ``source_embedding``/``target_embedding`` are identical passthroughs.
 - **Negative sampling refresh cadence is fixed at every 10 epochs**
   (matching OpenEA's ``if i % 10 == 1``), independent of ``eval_every``.
+- **Candidate scoring uses Manhattan (L1) distance, not cosine
+  similarity.** OpenEA's own config for this method is ``eval_metric:
+  "manhattan"``, ``eval_norm: false`` (confirmed by reading
+  ``run/args/gcnalign_args_15K.json`` directly) -- and the margin loss
+  both branches train under
+  ([margin_ranking_loss_l1][linkingtk.algorithms.ea._ea_losses.margin_ranking_loss_l1])
+  is itself L1-based, so embeddings are optimized to be *close in L1
+  distance*, not high-cosine. Scoring with a metric that matches the
+  training geometry, rather than an arbitrary different one, is a real
+  correctness fix, not just fidelity to OpenEA's own choice -- confirmed
+  empirically on the real EN-FR-15K-V1 benchmark (structural-only):
+  Hits@1 0.130 (cosine) -> 0.147 (manhattan, no CSLS). CSLS
+  (Cross-domain Similarity Local Scaling, ``csls_k=10`` in OpenEA's own
+  config) is a further, separate refinement -- see
+  [rank_exhaustive][linkingtk.eval.ranking.rank_exhaustive]'s ``csls_k``
+  parameter, used by ``examples/gcn_align_benchmark.py`` but not by
+  ``link()`` itself (CSLS needs the full candidate pool's neighbor
+  structure, which doesn't fit ``link()``'s post-blocking, per-source
+  candidate-list shape).
 """
 
 from __future__ import annotations
@@ -57,12 +81,16 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+from scipy.spatial.distance import cdist
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
 from linkingtk.algorithms.ea._ea_losses import margin_ranking_loss_l1
-from linkingtk.algorithms.ea._gcn_align_torch import build_gcn_align_branch
+from linkingtk.algorithms.ea._gcn_align_torch import (
+    build_gcn_align_attr_branch,
+    build_gcn_align_branch,
+)
 from linkingtk.algorithms.ea._gcn_align_training import (
+    build_attribute_features,
     build_weighted_adjacency,
     compute_relation_functionality,
     sample_negatives,
@@ -80,20 +108,23 @@ from linkingtk.utils.sparse_gcn import coo_to_torch_sparse, normalize_adjacency_
 if TYPE_CHECKING:
     import numpy.typing as npt
 
+    from linkingtk.utils.graph import Triple
+
 _NEG_REFRESH_INTERVAL = 10
 
 
 class GCNAlignLinker(BaseLinker):
-    """Scores candidate pairs via a 2-layer structural GCN's propagated embeddings.
+    """Scores candidate pairs via a 2-layer GCN's propagated embeddings.
 
     Must be [fit][linkingtk.algorithms.ea.gcn_align.GCNAlignLinker.fit] before
     [link][linkingtk.algorithms.base.BaseLinker.link] can be called. See the
-    module docstring for what's ported vs. deliberately deviated from OpenEA.
+    module docstring for what's ported vs. deliberately deviated from OpenEA,
+    and for the structural-only-vs.-``sa`` (structural+attribute) tradeoff.
 
     Args:
-        embedding_dim: Dimensionality of the propagated entity embeddings
-            (OpenEA's ``se_dim``). OpenEA's published EN-FR-15K-V1 config
-            uses ``100``.
+        embedding_dim: Dimensionality of the propagated structural
+            embeddings (OpenEA's ``se_dim``). OpenEA's published
+            EN-FR-15K-V1 config uses ``100``.
         num_epochs: Training epochs. OpenEA's published value allows up to
             ``2000`` with early stopping.
         learning_rate: Plain SGD's learning rate -- see the module docstring
@@ -108,6 +139,21 @@ class GCNAlignLinker(BaseLinker):
             [build_weighted_adjacency][linkingtk.algorithms.ea._gcn_align_training.build_weighted_adjacency].
             OpenEA's own value (hardcoded, not configurable in the
             reference) is ``0.3``.
+        use_attributes: Whether to also train the attribute (``ae``) branch
+            -- needs `fit()`'s ``attribute_triples1``/``attribute_triples2``
+            to be given. Defaults to ``False`` (structural-only, needs
+            nothing beyond plain relational triples).
+        attr_dim: Dimensionality of the propagated attribute embeddings
+            (OpenEA's ``ae_dim``). Only used if ``use_attributes``. OpenEA's
+            published value is ``100``.
+        attr_top_fraction: Fraction of the combined attribute-predicate
+            vocabulary kept as feature columns -- see
+            [build_attribute_features][linkingtk.algorithms.ea._gcn_align_training.build_attribute_features].
+            Only used if ``use_attributes``. OpenEA's own value (hardcoded)
+            is ``0.7``.
+        beta: Weight on the structural half of the concatenated
+            ``[se * beta, ae * (1 - beta)]`` scoring embedding. Only used
+            if ``use_attributes``. OpenEA's published value is ``0.9``.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
@@ -124,6 +170,10 @@ class GCNAlignLinker(BaseLinker):
         neg_triple_num: int = 5,
         gamma: float = 3.0,
         min_weight: float = 0.3,
+        use_attributes: bool = False,
+        attr_dim: int = 100,
+        attr_top_fraction: float = 0.7,
+        beta: float = 0.9,
         matching: Matcher = DEFAULT_MATCHER,
         device: str = "cpu",
     ) -> None:
@@ -133,6 +183,10 @@ class GCNAlignLinker(BaseLinker):
         self.neg_triple_num = neg_triple_num
         self.gamma = gamma
         self.min_weight = min_weight
+        self.use_attributes = use_attributes
+        self.attr_dim = attr_dim
+        self.attr_top_fraction = attr_top_fraction
+        self.beta = beta
         self.matching = matching
         self.device = device
         self._id_to_vector: dict[str, npt.NDArray[np.floating[Any]]] = {}
@@ -148,8 +202,10 @@ class GCNAlignLinker(BaseLinker):
         val_ground_truth: list[tuple[str, str]] | None = None,
         patience: int = 5,
         eval_every: int = 10,
+        attribute_triples1: list[Triple] | None = None,
+        attribute_triples2: list[Triple] | None = None,
     ) -> GCNAlignLinker:
-        """Propagate a learnable entity embedding table through the relational graph.
+        """Propagate structural (and, if enabled, attribute) embeddings through the graph.
 
         Args:
             dataset1: Source entities. Unused beyond mirroring sibling
@@ -162,7 +218,9 @@ class GCNAlignLinker(BaseLinker):
                 ``to_triples(graph1) + to_triples(graph2)`` from a
                 [GraphDatasetLoader][linkingtk.datasets.base.GraphDatasetLoader]'s
                 ``load_graphs()``) -- entity ids on both sides must already
-                be disjoint, as they are from that loader.
+                be disjoint, as they are from that loader. Also drives the
+                structural adjacency both branches propagate over, even
+                when ``use_attributes`` is set.
             random_state: Seed for reproducible training. Left unspecified,
                 training is non-deterministic.
             val_ground_truth: Optional held-out pairs used for early
@@ -175,14 +233,23 @@ class GCNAlignLinker(BaseLinker):
                 ``val_ground_truth`` is given.
             eval_every: How often (in epochs) to check ``val_ground_truth``.
                 Only used if ``val_ground_truth`` is given.
+            attribute_triples1: KG1's ``(entity_id, predicate, value)``
+                attribute triples, e.g. from
+                [EnFr15KAttrDataset.load_attribute_triples][linkingtk.datasets.openea_native._OpenEANativeDataset.load_attribute_triples].
+                Required if ``use_attributes`` (set in ``__init__``);
+                ignored otherwise.
+            attribute_triples2: KG2's own attribute triples. See
+                ``attribute_triples1``.
 
         Returns:
             ``self``, for chaining.
 
         Raises:
             LinkingTKError: If none of ``ground_truth``'s pairs have both
-                ids present in ``graph``'s own triples, or if ``device`` is
-                invalid or unavailable.
+                ids present in ``graph``'s own triples, if ``use_attributes``
+                is set but no attribute triples (or no attribute predicate
+                clears ``attr_top_fraction``'s cutoff) are given, or if
+                ``device`` is invalid or unavailable.
             OptionalDependencyError: If torch isn't installed.
         """
         try:
@@ -219,8 +286,35 @@ class GCNAlignLinker(BaseLinker):
             norm_indices, norm_values, (num_entities, num_entities), device
         )
 
-        model = build_gcn_align_branch(num_entities, self.embedding_dim).to(device)
-        optimizer = torch.optim.SGD(model.parameters(), lr=self.learning_rate)
+        model_se = build_gcn_align_branch(num_entities, self.embedding_dim).to(device)
+        optimizer_se = torch.optim.SGD(model_se.parameters(), lr=self.learning_rate)
+
+        model_ae: torch.nn.Module | None = None
+        optimizer_ae: torch.optim.Optimizer | None = None
+        attr_features: torch.Tensor | None = None
+        if self.use_attributes:
+            if not attribute_triples1 and not attribute_triples2:
+                raise LinkingTKError(
+                    "GCNAlignLinker(use_attributes=True) needs `attribute_triples1`/"
+                    "`attribute_triples2` -- pass entities and attribute triples from "
+                    "EnFr15KAttrDataset (or similar), not EnFr15KDataset."
+                )
+            attr_indices, attr_values, num_attrs = build_attribute_features(
+                attribute_triples1 or [],
+                attribute_triples2 or [],
+                entity_to_id,
+                self.attr_top_fraction,
+            )
+            if num_attrs == 0:
+                raise LinkingTKError(
+                    "GCNAlignLinker(use_attributes=True): no attribute predicate cleared "
+                    "`attr_top_fraction`'s cutoff -- nothing to train the attribute branch with."
+                )
+            attr_features = coo_to_torch_sparse(
+                attr_indices, attr_values, (num_entities, num_attrs), device
+            )
+            model_ae = build_gcn_align_attr_branch(num_attrs, self.attr_dim).to(device)
+            optimizer_ae = torch.optim.SGD(model_ae.parameters(), lr=self.learning_rate)
 
         val_pairs = [
             (s, t) for s, t in (val_ground_truth or []) if s in entity_to_id and t in entity_to_id
@@ -242,15 +336,22 @@ class GCNAlignLinker(BaseLinker):
                 torch.from_numpy(neg2_right_np).long().to(device),
             )
 
+        def _combined_embeddings(
+            se: npt.NDArray[Any], ae: npt.NDArray[Any] | None
+        ) -> npt.NDArray[Any]:
+            if ae is None:
+                return se
+            return np.concatenate([se * self.beta, ae * (1.0 - self.beta)], axis=1)
+
         neg_left, neg_right, neg2_left, neg2_right = _resample_negatives()
 
         for epoch in range(self.num_epochs):
             if epoch % _NEG_REFRESH_INTERVAL == 0 and epoch > 0:
                 neg_left, neg_right, neg2_left, neg2_right = _resample_negatives()
 
-            embeddings = model(adjacency)
-            loss = margin_ranking_loss_l1(
-                embeddings,
+            embeddings_se = model_se(adjacency)
+            loss_se = margin_ranking_loss_l1(
+                embeddings_se,
                 pos_left,
                 pos_right,
                 neg_left,
@@ -259,13 +360,35 @@ class GCNAlignLinker(BaseLinker):
                 neg2_right,
                 self.gamma,
             )
-            optimizer.zero_grad()
-            loss.backward()  # type: ignore[no-untyped-call]
-            optimizer.step()
+            optimizer_se.zero_grad()
+            loss_se.backward()  # type: ignore[no-untyped-call]
+            optimizer_se.step()
+
+            if model_ae is not None and optimizer_ae is not None and attr_features is not None:
+                embeddings_ae = model_ae(adjacency, attr_features)
+                loss_ae = margin_ranking_loss_l1(
+                    embeddings_ae,
+                    pos_left,
+                    pos_right,
+                    neg_left,
+                    neg_right,
+                    neg2_left,
+                    neg2_right,
+                    self.gamma,
+                )
+                optimizer_ae.zero_grad()
+                loss_ae.backward()  # type: ignore[no-untyped-call]
+                optimizer_ae.step()
 
             if val_pairs and (epoch + 1) % eval_every == 0:
                 with torch.no_grad():
-                    current_embeds = model(adjacency).cpu().numpy()
+                    se_np = model_se(adjacency).cpu().numpy()
+                    ae_np = (
+                        model_ae(adjacency, attr_features).cpu().numpy()
+                        if model_ae is not None and attr_features is not None
+                        else None
+                    )
+                current_embeds = _combined_embeddings(se_np, ae_np)
                 hits1 = _validation_hits1(current_embeds, entity_to_id, val_pairs)
                 if hits1 <= best_hits1:
                     epochs_without_improvement += 1
@@ -276,7 +399,13 @@ class GCNAlignLinker(BaseLinker):
                     epochs_without_improvement = 0
 
         with torch.no_grad():
-            final_embeds = model(adjacency).cpu().numpy()
+            final_se = model_se(adjacency).cpu().numpy()
+            final_ae = (
+                model_ae(adjacency, attr_features).cpu().numpy()
+                if model_ae is not None and attr_features is not None
+                else None
+            )
+        final_embeds = _combined_embeddings(final_se, final_ae)
         self._id_to_vector = {
             entity_id: final_embeds[index] for entity_id, index in entity_to_id.items()
         }
@@ -302,7 +431,7 @@ class GCNAlignLinker(BaseLinker):
         for source_id, target_ids in target_ids_by_source.items():
             source_vector = self.source_embedding(source_id).reshape(1, -1)
             target_matrix = np.stack([self.target_embedding(target_id) for target_id in target_ids])
-            scores = cosine_similarity(source_vector, target_matrix)[0]
+            scores = _manhattan_similarity(source_vector, target_matrix)[0]
             candidates_by_source[source_id] = list(
                 zip(target_ids, (float(score) for score in scores), strict=True)
             )
@@ -345,7 +474,20 @@ def _validation_hits1(
     targets = [t for _, t in val_pairs]
     source_matrix = np.stack([embeds[entity_to_id[s]] for s in sources])
     target_matrix = np.stack([embeds[entity_to_id[t]] for t in targets])
-    similarities = cosine_similarity(source_matrix, target_matrix)
+    similarities = _manhattan_similarity(source_matrix, target_matrix)
     predicted = np.argmax(similarities, axis=1)
     correct = sum(1 for i, j in enumerate(predicted) if j == i)
     return correct / len(val_pairs)
+
+
+def _manhattan_similarity(
+    source_matrix: npt.NDArray[np.floating[Any]], target_matrix: npt.NDArray[np.floating[Any]]
+) -> npt.NDArray[np.floating[Any]]:
+    """``1 - L1 distance`` -- matches
+    [margin_ranking_loss_l1][linkingtk.algorithms.ea._ea_losses.margin_ranking_loss_l1]'s
+    training geometry, unlike cosine similarity. See the module docstring.
+    """
+    result: npt.NDArray[np.floating[Any]] = 1 - cdist(
+        source_matrix, target_matrix, metric="cityblock"
+    )
+    return result
