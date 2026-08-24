@@ -242,10 +242,19 @@ Toy datasets:
 
 - AIDA-CoNLL: This has some questionable licensing... technically it is not 
    available but it is easy to find in fact
-- TAC KBP:
+- TAC KBP: Genuinely LDC-licensed (LDC2018T16 + the LDC2014T16 reference
+   KB), no free redistribution exists anywhere -- unlike AIDA-CoNLL/Zeshel,
+   which route around licensing via a Hugging Face Hub community republish.
+   Not implemented; would need a local LDC-obtained copy (`UfsacDataset`'s
+   "local path required" precedent), not a fetchable default.
 - ZESHEL: implemented, `linkingtk.datasets.zeshel.ZeshelDataset` (via the
    `naist-nlp/zeshel` Hugging Face Hub mirror)
 - DaMuEL: https://lindat.mff.cuni.cz/repository/items/10e1cc03-b24b-4e41-9df9-b0fe4324ccbe
+   -- implemented, `linkingtk.datasets.damuel.DamuelDataset`. Hosted on
+   LINDAT/CLARIAH-CZ (DSpace 7 REST API), one `damuel_1.0_<lang>.tar` per
+   language (278MB-26.3GB), each an uncompressed tar of 500 shuffled
+   xz-compressed JSON-Lines shards -- streamed and sampled (`max_parts`),
+   never fully downloaded.
 - LCQuAD 2.0: https://figshare.com/projects/LCQuAD_2_0/62270
 
 ### Word Sense Disambiguation Datasets

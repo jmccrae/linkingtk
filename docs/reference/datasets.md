@@ -40,6 +40,10 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 
 ::: linkingtk.datasets.zeshel
 
+## DaMuEL
+
+::: linkingtk.datasets.damuel
+
 ## SemCor
 
 ::: linkingtk.datasets.semcor
