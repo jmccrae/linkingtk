@@ -80,3 +80,87 @@ def test_empty_source_or_target_returns_empty_lists() -> None:
 
     assert rank_exhaustive(linker, [], _entities(["t1"])) == []
     assert rank_exhaustive(linker, _entities(["s1"]), []) == [("s1", [])]
+
+
+def test_manhattan_metric_ranks_by_ascending_l1_distance() -> None:
+    vectors = {
+        "s1": [0.0, 0.0],
+        "t_near": [1.0, 0.0],  # L1 distance 1
+        "t_far": [5.0, 5.0],  # L1 distance 10
+    }
+    linker = _FakeLinker(vectors, vectors)
+
+    ranked = rank_exhaustive(
+        linker, _entities(["s1"]), _entities(["t_far", "t_near"]), metric="manhattan"
+    )
+
+    assert ranked == [("s1", ["t_near", "t_far"])]
+
+
+def test_manhattan_and_cosine_can_disagree() -> None:
+    # "t_a" is closer by raw L1 distance; "t_b" is more cosine-aligned
+    # (same direction, just scaled) -- confirms the metric choice
+    # actually changes the ranking, not just the raw score values.
+    vectors = {
+        "s1": [1.0, 0.0],
+        "t_a": [0.9, 0.9],  # L1 dist 1.0, cosine ~0.707
+        "t_b": [10.0, 0.0],  # L1 dist 9.0, cosine 1.0
+    }
+    linker = _FakeLinker(vectors, vectors)
+
+    cosine_ranked = rank_exhaustive(
+        linker, _entities(["s1"]), _entities(["t_a", "t_b"]), metric="cosine"
+    )
+    manhattan_ranked = rank_exhaustive(
+        linker, _entities(["s1"]), _entities(["t_a", "t_b"]), metric="manhattan"
+    )
+
+    assert cosine_ranked == [("s1", ["t_b", "t_a"])]
+    assert manhattan_ranked == [("s1", ["t_a", "t_b"])]
+
+
+def test_inner_metric_ranks_by_raw_dot_product() -> None:
+    vectors = {"s1": [1.0, 0.0], "t_small": [0.1, 0.0], "t_large": [5.0, 0.0]}
+    linker = _FakeLinker(vectors, vectors)
+
+    ranked = rank_exhaustive(
+        linker, _entities(["s1"]), _entities(["t_small", "t_large"]), metric="inner"
+    )
+
+    assert ranked == [("s1", ["t_large", "t_small"])]
+
+
+def test_unsupported_metric_raises() -> None:
+    import pytest
+
+    linker = _FakeLinker({"s1": [1.0]}, {"t1": [1.0]})
+    with pytest.raises(ValueError, match="Unsupported metric"):
+        rank_exhaustive(linker, _entities(["s1"]), _entities(["t1"]), metric="euclidean")  # type: ignore[arg-type]
+
+
+def test_csls_matches_manual_formula() -> None:
+    # cosine sim matrix is the identity: s1~t1=1, s1~t2=0, s2~t1=0, s2~t2=1.
+    # With k=1, each source's/target's own nearest-neighbor mean is 1 (its
+    # perfect match), so csls[i, j] = 2 * sim[i, j] - 1 - 1 -- computed by
+    # hand here and compared directly against rank_exhaustive's ordering,
+    # rather than relying on an intuitive "hub" narrative that's fragile to
+    # construct correctly at this tiny (2x2) scale.
+    linker = _FakeLinker(
+        source_vectors={"s1": [1.0, 0.0], "s2": [0.0, 1.0]},
+        target_vectors={"t1": [1.0, 0.0], "t2": [0.0, 1.0]},
+    )
+
+    ranked = rank_exhaustive(linker, _entities(["s1", "s2"]), _entities(["t1", "t2"]), csls_k=1)
+
+    # csls[s1, t1] = 2*1 - 2 = 0 > csls[s1, t2] = 2*0 - 2 = -2 -> t1 first.
+    assert ranked == [("s1", ["t1", "t2"]), ("s2", ["t2", "t1"])]
+
+
+def test_csls_k_zero_matches_plain_metric() -> None:
+    vectors = {"s1": [1.0, 0.5], "t1": [1.0, 0.0], "t2": [0.0, 1.0]}
+    linker = _FakeLinker(vectors, vectors)
+
+    plain = rank_exhaustive(linker, _entities(["s1"]), _entities(["t1", "t2"]))
+    csls_off = rank_exhaustive(linker, _entities(["s1"]), _entities(["t1", "t2"]), csls_k=0)
+
+    assert plain == csls_off
