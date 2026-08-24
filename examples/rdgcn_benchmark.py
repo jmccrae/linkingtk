@@ -12,6 +12,13 @@ entity against every test-target entity, via linkingtk.eval.rank_exhaustive,
 no blocking/candidate restriction), matching OpenEA's own evaluation
 methodology.
 
+Scoring uses Manhattan distance + CSLS(k=10), matching OpenEA's own
+configured evaluation methodology for this method (``eval_metric:
+"manhattan"``, ``eval_norm: false``, ``csls: 10`` in
+``run/args/rdgcn_args_15K.json``) -- see the module docstring on
+linkingtk.algorithms.ea.rdgcn for why cosine similarity (this package's
+usual default) undershoots the published number.
+
 Requires the `kge` optional dependency group (for `torch`) — install with
 `uv sync --extra kge`. Fetches OpenEA's dataset zip (multi-MB) *and*
 fastText's pretrained word vectors (`wiki-news-300d-1M.vec.zip`, ~681MB)
@@ -53,10 +60,12 @@ def main() -> None:
         linker,
         [e for e in entities1 if e.id in test_source_ids],
         [e for e in entities2 if e.id in test_target_ids],
+        metric="manhattan",
+        csls_k=10,
     )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
     print(f"{len(train_pairs)} train / {len(val_pairs)} val / {len(test_pairs)} test pairs")
-    print("Metrics:", report.metrics)
+    print("Metrics (manhattan + csls=10, matching OpenEA's own methodology):", report.metrics)
     print("Published OpenEA RDGCN EN-FR-15K-V1: Hits@1=0.755, Hits@10=0.880, MRR=0.800")
 
 

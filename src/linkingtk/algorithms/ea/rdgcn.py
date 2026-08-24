@@ -53,6 +53,24 @@ source):
   simplification vs. TensorFlow's uncoalesced-sparse-tensor behavior; see
   [_SparseAttentionLayer][linkingtk.algorithms.ea._rdgcn_torch.build_rdgcn_model]'s
   docstring (inside ``build_rdgcn_model``).
+- **Candidate scoring uses Manhattan (L1) distance, not cosine
+  similarity.** OpenEA's own config for this method is ``eval_metric:
+  "manhattan"``, ``eval_norm: false`` (confirmed by reading
+  ``run/args/rdgcn_args_15K.json`` directly) -- and
+  [margin_ranking_loss_l1][linkingtk.algorithms.ea._ea_losses.margin_ranking_loss_l1]
+  itself trains embeddings to be close in L1 distance, not high-cosine.
+  This is a real correctness fix matching the training geometry, not
+  just fidelity to OpenEA's own choice -- confirmed empirically: on the
+  real EN-FR-15K-V1 benchmark, switching the *evaluation* metric alone
+  (same trained embeddings, via
+  [rank_exhaustive][linkingtk.eval.ranking.rank_exhaustive]'s ``metric``/
+  ``csls_k``) moved Hits@1 from 0.666 (cosine) to 0.735
+  (manhattan+CSLS k=10, OpenEA's own config) against a published 0.755 --
+  closing the gap from ~88% to ~97% relative. CSLS (Cross-domain
+  Similarity Local Scaling) is a further, separate refinement used by
+  ``examples/rdgcn_benchmark.py`` but not by ``link()`` itself (CSLS
+  needs the full candidate pool's neighbor structure, which doesn't fit
+  ``link()``'s post-blocking, per-source candidate-list shape).
 """
 
 from __future__ import annotations
@@ -61,7 +79,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+from scipy.spatial.distance import cdist
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
 from linkingtk.algorithms.ea._ea_losses import margin_ranking_loss_l1
@@ -389,7 +407,7 @@ class RDGCNLinker(BaseLinker):
         for source_id, target_ids in target_ids_by_source.items():
             source_vector = self.source_embedding(source_id).reshape(1, -1)
             target_matrix = np.stack([self.target_embedding(target_id) for target_id in target_ids])
-            scores = cosine_similarity(source_vector, target_matrix)[0]
+            scores = _manhattan_similarity(source_vector, target_matrix)[0]
             candidates_by_source[source_id] = list(
                 zip(target_ids, (float(score) for score in scores), strict=True)
             )
@@ -429,7 +447,20 @@ def _validation_hits1(
     targets = [t for _, t in val_pairs]
     source_matrix = np.stack([embeds[entity_to_id[s]] for s in sources])
     target_matrix = np.stack([embeds[entity_to_id[t]] for t in targets])
-    similarities = cosine_similarity(source_matrix, target_matrix)
+    similarities = _manhattan_similarity(source_matrix, target_matrix)
     predicted = np.argmax(similarities, axis=1)
     correct = sum(1 for i, j in enumerate(predicted) if j == i)
     return correct / len(val_pairs)
+
+
+def _manhattan_similarity(
+    source_matrix: npt.NDArray[np.floating[Any]], target_matrix: npt.NDArray[np.floating[Any]]
+) -> npt.NDArray[np.floating[Any]]:
+    """``1 - L1 distance`` -- matches
+    [margin_ranking_loss_l1][linkingtk.algorithms.ea._ea_losses.margin_ranking_loss_l1]'s
+    training geometry, unlike cosine similarity. See the module docstring.
+    """
+    result: npt.NDArray[np.floating[Any]] = 1 - cdist(
+        source_matrix, target_matrix, metric="cityblock"
+    )
+    return result

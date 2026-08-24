@@ -20,6 +20,14 @@ target).
 AliNet is structural-only (no attribute-triple dependency), so this uses
 EnFr15KDataset like gcn_align_benchmark.py, not EnFr15KAttrDataset.
 
+Applies CSLS(k=10) (matching OpenEA's own ``csls: 10`` config) for
+methodology parity with gcn_align_benchmark.py/rdgcn_benchmark.py, even
+without a published number to check it against. Plain cosine similarity
+(this package's default, no ``metric=`` override needed) already matches
+OpenEA's own ``eval_metric: "inner"`` config for this method -- AliNet's
+own output is L2-normalized internally, so raw inner product and cosine
+rank identically; see the module docstring on linkingtk.algorithms.ea.alinet.
+
 Requires the `kge` optional dependency group (for `torch`) — install with
 `uv sync --extra kge`. Fetches a zip over the network the first time it's
 run; cached under ~/.cache/linkingtk/downloads after that.
@@ -58,6 +66,7 @@ def main() -> None:
         linker,
         [e for e in entities1 if e.id in test_source_ids],
         [e for e in entities2 if e.id in test_target_ids],
+        csls_k=10,
     )
     report = Evaluator.evaluate_ranked(ranked_predictions, ground_truth=test_pairs, top_k=[1, 10])
     print(f"{len(train_pairs)} train / {len(test_pairs)} test pairs")

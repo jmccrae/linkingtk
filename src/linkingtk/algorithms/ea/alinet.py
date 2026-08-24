@@ -56,6 +56,20 @@ source):
   actual loss). See
   [_alinet_torch][linkingtk.algorithms.ea._alinet_torch]'s module
   docstring.
+- **Candidate scoring uses cosine similarity, unlike
+  [GCNAlignLinker][linkingtk.algorithms.ea.gcn_align.GCNAlignLinker]/
+  [RDGCNLinker][linkingtk.algorithms.ea.rdgcn.RDGCNLinker] (both switched
+  to Manhattan distance -- see their own module docstrings for why).**
+  Checked, not overlooked: OpenEA's own config for this method is
+  ``eval_metric: "inner"`` (raw dot product) over embeddings its own
+  ``_eval_test_embeddings``/``save`` L2-normalize immediately before
+  scoring -- and
+  [AliNetModel][linkingtk.algorithms.ea._alinet_torch.build_alinet_model]'s
+  own ``forward()`` already returns L2-normalized output (the final
+  ``functional.normalize(concatenated, dim=1)`` call), so raw inner
+  product over these embeddings is mathematically identical to cosine
+  similarity (``a . b == cosine(a, b)`` when ``|a| = |b| = 1``). No
+  change needed here.
 """
 
 from __future__ import annotations
