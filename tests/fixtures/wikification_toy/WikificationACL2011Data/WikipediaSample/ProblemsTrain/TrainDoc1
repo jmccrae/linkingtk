@@ -1,0 +1,28 @@
+<ReferenceProblem>
+	<ReferenceFileName>
+		TrainDoc1
+	</ReferenceFileName>
+<ReferenceInstance>
+	<SurfaceForm>
+		London
+	</SurfaceForm>
+	<Offset>
+		0
+	</Offset>
+	<Length>
+		6
+	</Length>
+	<ChosenAnnotation>
+		London
+	</ChosenAnnotation>
+	<NumAnnotators>
+		1
+	</NumAnnotators>
+	<AnnotatorId>
+		A Wikipedian
+	</AnnotatorId>
+	<Annotation>
+		London
+	</Annotation>
+</ReferenceInstance>
+</ReferenceProblem>

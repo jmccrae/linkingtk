@@ -28,6 +28,12 @@ from linkingtk.datasets.openea_native import (
 from linkingtk.datasets.semcor import SemCorDataset
 from linkingtk.datasets.toy import ToyEADataset, ToyELDataset, ToyWSADataset, ToyWSDDataset
 from linkingtk.datasets.ufsac import UfsacDataset
+from linkingtk.datasets.wikification import (
+    Ace2004Dataset,
+    AquaintDataset,
+    MsnbcDataset,
+    WikipediaSampleDataset,
+)
 from linkingtk.datasets.wordnet_wikidata import (
     WordNetWikidataLanguagesDataset,
     WordNetWikidataLocationsDataset,
@@ -67,4 +73,8 @@ __all__ = [
     "SemCorDataset",
     "UfsacDataset",
     "ZeshelDataset",
+    "MsnbcDataset",
+    "Ace2004Dataset",
+    "AquaintDataset",
+    "WikipediaSampleDataset",
 ]

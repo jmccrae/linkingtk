@@ -1,0 +1,28 @@
+<ReferenceProblem>
+	<ReferenceFileName>
+		TestDoc1
+	</ReferenceFileName>
+<ReferenceInstance>
+	<SurfaceForm>
+		Tokyo
+	</SurfaceForm>
+	<Offset>
+		0
+	</Offset>
+	<Length>
+		5
+	</Length>
+	<ChosenAnnotation>
+		Tokyo
+	</ChosenAnnotation>
+	<NumAnnotators>
+		1
+	</NumAnnotators>
+	<AnnotatorId>
+		A Wikipedian
+	</AnnotatorId>
+	<Annotation>
+		Tokyo
+	</Annotation>
+</ReferenceInstance>
+</ReferenceProblem>

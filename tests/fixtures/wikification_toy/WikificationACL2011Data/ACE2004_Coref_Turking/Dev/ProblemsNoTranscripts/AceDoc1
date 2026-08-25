@@ -1,0 +1,28 @@
+<ReferenceProblem>
+	<ReferenceFileName>
+		AceDoc1
+	</ReferenceFileName>
+<ReferenceInstance>
+	<SurfaceForm>
+		Berlin
+	</SurfaceForm>
+	<Offset>
+		0
+	</Offset>
+	<Length>
+		6
+	</Length>
+	<ChosenAnnotation>
+		http://en.wikipedia.org/wiki/Berlin
+	</ChosenAnnotation>
+	<NumAnnotators>
+		1
+	</NumAnnotators>
+	<AnnotatorId>
+		MajorityVoteOf5Turkers
+	</AnnotatorId>
+	<Annotation>
+		Berlin
+	</Annotation>
+</ReferenceInstance>
+</ReferenceProblem>

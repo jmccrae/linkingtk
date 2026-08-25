@@ -269,6 +269,24 @@ Toy datasets:
    real sample; the rest are skipped, same convention as AIDA-CoNLL's NIL
    mentions). KB entity labels/descriptions are fetched live from
    Wikidata (`wbgetentities`, batched + disk-cached + retried).
+- MSNBC, ACE2004, AQUAINT, WikipediaSample: implemented,
+   `linkingtk.datasets.wikification` (`MsnbcDataset`, `Ace2004Dataset`,
+   `AquaintDataset`, `WikipediaSampleDataset`). All four are distributed
+   in one archive from UPenn CogComp --
+   https://cogcomp.seas.upenn.edu/Data/ACL2011WikificationData.zip -- the
+   data behind Ratinov et al. (2011)'s wikifier, also carrying Cucerzan
+   (2007)'s original MSNBC annotations and Milne & Witten's AQUAINT/
+   ACE2004 annotations. Each document is a simple pseudo-XML gold file
+   (`SurfaceForm`/`Offset`/`Length`/`ChosenAnnotation` per mention) plus a
+   matching raw-text file that the offsets index into directly; NIL
+   mentions (`ChosenAnnotation` = `*null*`) are skipped, same convention
+   as AIDA-CoNLL. MSNBC/ACE2004/AQUAINT are small evaluation-only gold
+   standards (20/57/50 documents); WikipediaSample is a much larger
+   auto-derived corpus (9938 train + 40 test documents, mentions from
+   Wikipedia's own internal wikilinks) with a native train/test split
+   exposed via `load_splits()`, and a `max_train_documents` cap (default
+   500) since the full train split is too large to parse and
+   description-fetch by default.
 
 ### Word Sense Disambiguation Datasets
 
