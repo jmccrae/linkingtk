@@ -3,6 +3,7 @@ from __future__ import annotations
 import pickle
 import sys
 import types
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -147,6 +148,55 @@ class TestBuildAndSearch:
         source = VectorIndexEntitySource.build([], _FakeEmbedder(), tmp_path / "idx")
 
         assert source.search("anything") == []
+
+    def test_batch_size_smaller_than_entity_count_still_indexes_everything(
+        self, tmp_path: Path
+    ) -> None:
+        # Forces multiple flush_batch() calls inside build() (streaming path).
+        source = VectorIndexEntitySource.build(
+            _ENTITIES, _FakeEmbedder(), tmp_path / "idx", reduced_dim=None, batch_size=1
+        )
+
+        assert {e.id for e in source.search("Paris", top_k=3)} >= {"Q1", "Q2"}
+        assert source.get("Q3") is not None
+
+
+class _ReiterableEntities:
+    """A re-iterable Entity source (fresh generator each __iter__ call) --
+    stands in for `WikidataDumpEntities`, without needing a real file.
+    """
+
+    def __init__(self, entities: list[Entity]) -> None:
+        self._entities = entities
+
+    def __iter__(self) -> Iterator[Entity]:
+        yield from self._entities
+
+
+class TestReiterableSource:
+    def test_build_from_reiterable_object_with_reduced_dim(self, tmp_path: Path) -> None:
+        source = VectorIndexEntitySource.build(
+            _ReiterableEntities(_ENTITIES), _FakeEmbedder(), tmp_path / "idx", reduced_dim=2
+        )
+
+        assert [e.id for e in source.search("London", top_k=1)] == ["Q3"]
+
+    def test_build_from_one_shot_generator_with_reduced_dim_none_works(
+        self, tmp_path: Path
+    ) -> None:
+        source = VectorIndexEntitySource.build(
+            (e for e in _ENTITIES), _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+
+        assert [e.id for e in source.search("London", top_k=1)] == ["Q3"]
+
+    def test_build_from_one_shot_generator_with_reduced_dim_set_raises(
+        self, tmp_path: Path
+    ) -> None:
+        with pytest.raises(TypeError, match="re-iterable"):
+            VectorIndexEntitySource.build(
+                (e for e in _ENTITIES), _FakeEmbedder(), tmp_path / "idx", reduced_dim=2
+            )
 
 
 class TestGet:

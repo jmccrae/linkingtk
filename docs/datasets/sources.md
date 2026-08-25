@@ -131,6 +131,33 @@ optional dependency (`faiss-cpu` + `sentence-transformers`):
 plain `Iterable[Entity]`, so it works as a local index over any large
 target (a big `WnEntitySource` export, a custom corpus), not just Wikidata.
 
+#### Building from a real Wikidata dump
+
+The example above builds from a small in-memory list, but `build()`
+*streams* its `entities` argument rather than materializing it — so it
+scales to a real dump, too.
+[`WikidataDumpEntities`](../reference/sources.md) reads
+[Wikidata's official JSON dump](https://www.wikidata.org/wiki/Wikidata:Database_download)
+(`latest-all.json.gz`, or any truncated/filtered subset in the same
+line-delimited shape) directly, generalizing the dump-processing step of
+[`wn-wd-entity-align`](https://github.com/jmccrae/wn-wd-entity-align)'s own
+FAISS pipeline (which instead needed an already-filtered, already-sorted
+N-Triples intermediate file):
+
+```python
+from linkingtk.sources import WikidataDumpEntities, VectorIndexEntitySource
+
+dump = WikidataDumpEntities("latest-all.json.gz", lang="en")
+VectorIndexEntitySource.build(dump, embedder, Path("wikidata_index"))
+```
+
+`WikidataDumpEntities` is re-iterable — each `for` loop over it reopens
+and re-reads the file from the start — which is what lets `build()` make
+its two passes (fitting the SVD sample, then indexing) directly over a
+dump file without ever loading it all into memory. A plain one-off
+generator can't do this: pass `reduced_dim=None` if you want to index
+from a true single-use iterator instead.
+
 ## Caching wrapper
 
 Any `EntitySource` — including your own — can be wrapped in

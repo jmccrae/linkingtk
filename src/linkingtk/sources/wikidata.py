@@ -6,11 +6,17 @@ query-driven [EntitySource][linkingtk.core.source.EntitySource], the same way
 targets live Wikipedia. Live per-mention Wikidata queries don't scale well
 (see [linkingtk.sources.vector_index][]'s module docstring) -- pass a
 prebuilt [VectorIndexEntitySource][linkingtk.sources.vector_index.VectorIndexEntitySource]
-as `vector_index` to search/get entirely locally instead.
+as `vector_index` to search/get entirely locally instead. `WikidataDumpEntities`
+in this module streams `Entity` objects straight from a downloaded Wikidata
+dump to build one.
 """
 
 from __future__ import annotations
 
+import gzip
+import json
+from collections.abc import Iterator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from linkingtk.core.entity import Entity
@@ -25,13 +31,93 @@ _USER_AGENT = "linkingtk/0.1 (https://github.com/jmccrae/linkingtk)"
 
 
 def _instance_of_qids(claims: dict[str, Any]) -> list[str]:
-    """QIDs from a ``wbgetentities`` entity's ``P31`` ("instance of") claims."""
+    """QIDs from a Wikidata entity's ``P31`` ("instance of") claims."""
     qids = []
     for claim in claims.get("P31", []):
         value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
         if isinstance(value, dict) and "id" in value:
             qids.append(value["id"])
     return qids
+
+
+def _entity_from_wikidata_json(data: dict[str, Any], lang: str) -> Entity | None:
+    """Build an `Entity` from one Wikidata item's own JSON representation.
+
+    ``wbgetentities``/``wbsearchentities`` responses and the official bulk
+    JSON dump (see `WikidataDumpEntities`) both represent an item with this
+    identical schema, so both go through this one extraction. `None` if
+    `data` has no `lang` label -- unusable as a search/blocking target.
+    """
+    label = data.get("labels", {}).get(lang, {}).get("value")
+    if label is None:
+        return None
+    aliases = [alias["value"] for alias in data.get("aliases", {}).get(lang, [])]
+    labels: list[str | tuple[str, str]] = [label] + [a for a in aliases if a != label]
+    description = data.get("descriptions", {}).get(lang, {}).get("value")
+    instance_of = _instance_of_qids(data.get("claims", {}))
+    properties = {"instance_of": " ".join(instance_of)} if instance_of else {}
+    return Entity(id=data["id"], labels=labels, description=description, properties=properties)
+
+
+class WikidataDumpEntities:
+    """Streams `Entity` objects from an official Wikidata JSON dump.
+
+    Wikidata publishes its full dump
+    (https://www.wikidata.org/wiki/Wikidata:Database_download) as
+    ``latest-all.json.gz``: a JSON array of entity objects, one compact
+    object per line (plus bracket-only first/last lines) -- written that
+    way specifically so it can be streamed line by line rather than parsed
+    as one huge array, which is exactly what this class does. A truncated
+    or filtered dump in the same line-delimited shape works too.
+
+    Generalizes (reads the dump directly, no intermediate file needed) the
+    dump-processing step of
+    [`wn-wd-entity-align`](https://github.com/jmccrae/wn-wd-entity-align)'s
+    own FAISS-index pipeline
+    (``wikidata_faiss/extract_dump_labels.py``, which instead expects an
+    already-filtered, already-sorted N-Triples export).
+
+    Re-iterable -- `__iter__` reopens and re-reads the file every call --
+    so it can be passed straight to
+    [VectorIndexEntitySource.build][linkingtk.sources.vector_index.VectorIndexEntitySource.build]
+    even with `reduced_dim` set (which needs two passes over its input); a
+    plain generator can't do that, since it's exhausted after one pass.
+
+    Args:
+        path: Path to the dump file. Gzip-decompressed on the fly if its
+            name ends in ``.gz`` (as the official dump does).
+        lang: Which language's label/description/aliases to read -- see
+            `WikidataEntitySource`.
+        limit: Stop after yielding this many entities, e.g. for a quick
+            local test against a full multi-hundred-GB dump.
+    """
+
+    def __init__(self, path: str | Path, lang: str = "en", limit: int | None = None) -> None:
+        self.path = Path(path)
+        self.lang = lang
+        self.limit = limit
+
+    def __iter__(self) -> Iterator[Entity]:
+        opener = gzip.open if self.path.name.endswith(".gz") else open
+        count = 0
+        with opener(self.path, "rt", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip().rstrip(",")
+                if stripped in ("", "[", "]"):
+                    continue
+                try:
+                    data = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                if data.get("type") != "item":
+                    continue
+                entity = _entity_from_wikidata_json(data, self.lang)
+                if entity is None:
+                    continue
+                yield entity
+                count += 1
+                if self.limit is not None and count >= self.limit:
+                    return
 
 
 class WikidataEntitySource(EntitySource):
@@ -136,13 +222,4 @@ class WikidataEntitySource(EntitySource):
         entity = next(iter(payload["entities"].values()))
         if "missing" in entity:
             return None
-
-        label = entity.get("labels", {}).get(self.lang, {}).get("value")
-        if label is None:
-            return None
-        description = entity.get("descriptions", {}).get(self.lang, {}).get("value")
-        instance_of = _instance_of_qids(entity.get("claims", {}))
-        properties = {"instance_of": " ".join(instance_of)} if instance_of else {}
-        return Entity(
-            id=entity["id"], labels=[label], description=description, properties=properties
-        )
+        return _entity_from_wikidata_json(entity, self.lang)

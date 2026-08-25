@@ -19,6 +19,7 @@ from __future__ import annotations
 import dbm
 import json
 import random
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
@@ -102,6 +103,28 @@ def _entity_from_json(raw: str) -> Entity:
     )
 
 
+def _reservoir_sample_texts(
+    entities: Iterable[Entity], k: int, extract: Callable[[Entity], str], seed: int = 42
+) -> list[str]:
+    """Uniformly sample up to `k` texts from a single streamed pass over `entities`.
+
+    Ported from `wn-wd-entity-align`'s `reservoir_sample_labels`: unlike
+    just taking the first `k`, this isn't biased toward whatever `entities`
+    happens to yield first (e.g. a dump sorted by id).
+    """
+    rng = random.Random(seed)
+    reservoir: list[str] = []
+    for i, entity in enumerate(entities):
+        text = extract(entity)
+        if i < k:
+            reservoir.append(text)
+        else:
+            j = rng.randint(0, i)
+            if j < k:
+                reservoir[j] = text
+    return reservoir
+
+
 def _project_and_normalize(vectors: np.ndarray, vh: np.ndarray | None) -> np.ndarray:
     if vh is not None:
         vectors = vectors @ vh
@@ -143,7 +166,7 @@ class VectorIndexEntitySource(EntitySource):
     @classmethod
     def build(
         cls,
-        entities: list[Entity],
+        entities: Iterable[Entity],
         embedder: Embedder,
         path: Path,
         field: Field = "label",
@@ -153,9 +176,20 @@ class VectorIndexEntitySource(EntitySource):
     ) -> VectorIndexEntitySource:
         """Build a fresh index over `entities`, persisted under `path`.
 
+        Streams `entities` rather than materializing it, so it scales to a
+        source too large to fit in memory at once -- e.g.
+        [WikidataDumpEntities][linkingtk.sources.wikidata.WikidataDumpEntities],
+        reading directly from a downloaded Wikidata dump.
+
         Args:
             entities: The entities to index. Each is embedded once, on the
                 text `field` resolves (default: its labels, space-joined).
+                Must be re-iterable (e.g. a `list`, or an object like
+                `WikidataDumpEntities` whose `__iter__` starts fresh each
+                call) when `reduced_dim` is set, since fitting the SVD
+                projection and indexing are then two separate passes over
+                `entities` -- a single-use iterator/generator only works
+                with `reduced_dim=None` (one pass).
             embedder: A batch text encoder (see `Embedder`), e.g. a real
                 `sentence_transformers.SentenceTransformer(...)`.
             path: Directory to write the index bundle to (created if
@@ -176,6 +210,8 @@ class VectorIndexEntitySource(EntitySource):
 
         Raises:
             OptionalDependencyError: If `faiss` isn't installed.
+            TypeError: If `reduced_dim` is set and `entities` is a
+                single-use iterator rather than a re-iterable object.
         """
         try:
             import faiss
@@ -183,21 +219,29 @@ class VectorIndexEntitySource(EntitySource):
             raise OptionalDependencyError("VectorIndexEntitySource", "vector-index") from exc
 
         extract = resolve_field(field)
-        texts = [extract(entity) for entity in entities]
 
         vh: np.ndarray | None = None
-        if reduced_dim is not None and texts:
-            rng = random.Random(42)
-            sample = texts if len(texts) <= sample_size else rng.sample(texts, sample_size)
-            sample_vectors = np.asarray(embedder.encode(sample))
-            _, _, vh_full = np.linalg.svd(sample_vectors, full_matrices=False)
-            # A too-small/low-rank sample (fewer distinct texts than
-            # reduced_dim) can't fit a projection of the requested size --
-            # silently slicing past vh_full's actual row count would instead
-            # produce a smaller-than-recorded matrix, corrupting save/load.
-            effective_dim = min(reduced_dim, vh_full.shape[0])
-            vh = vh_full[:effective_dim, :].T.astype(np.float32)
-            reduced_dim = effective_dim
+        if reduced_dim is not None:
+            if iter(entities) is entities:
+                raise TypeError(
+                    "entities must be re-iterable when reduced_dim is set -- fitting "
+                    "the SVD projection and indexing are two separate passes over "
+                    "entities. Pass a list, or an object like WikidataDumpEntities "
+                    "whose __iter__ starts fresh each call, not a single-use "
+                    "iterator/generator -- or pass reduced_dim=None for a one-shot "
+                    "iterator."
+                )
+            sample = _reservoir_sample_texts(entities, sample_size, extract)
+            if sample:
+                sample_vectors = np.asarray(embedder.encode(sample))
+                _, _, vh_full = np.linalg.svd(sample_vectors, full_matrices=False)
+                # A too-small/low-rank sample (fewer distinct texts than
+                # reduced_dim) can't fit a projection of the requested size --
+                # silently slicing past vh_full's actual row count would instead
+                # produce a smaller-than-recorded matrix, corrupting save/load.
+                effective_dim = min(reduced_dim, vh_full.shape[0])
+                vh = vh_full[:effective_dim, :].T.astype(np.float32)
+                reduced_dim = effective_dim
 
         index: faiss.Index | None = None
 
@@ -208,9 +252,13 @@ class VectorIndexEntitySource(EntitySource):
         with ids_path.open("w", encoding="utf-8") as ids_file, dbm.open(
             str(entities_db_path), "n"
         ) as entities_db:
-            for start in range(0, len(entities), batch_size):
-                batch = entities[start : start + batch_size]
-                batch_texts = texts[start : start + batch_size]
+            batch: list[Entity] = []
+            batch_texts: list[str] = []
+
+            def flush_batch() -> None:
+                nonlocal index
+                if not batch:
+                    return
                 vectors = _project_and_normalize(np.asarray(embedder.encode(batch_texts)), vh)
                 if index is None:
                     index = faiss.IndexFlatIP(vectors.shape[1])
@@ -218,6 +266,15 @@ class VectorIndexEntitySource(EntitySource):
                 for entity in batch:
                     ids_file.write(f"{entity.id}\n")
                     entities_db[entity.id] = _entity_to_json(entity)
+
+            for entity in entities:
+                batch.append(entity)
+                batch_texts.append(extract(entity))
+                if len(batch) >= batch_size:
+                    flush_batch()
+                    batch.clear()
+                    batch_texts.clear()
+            flush_batch()
 
         if index is None:
             # No entities given -- still need an index of the right dimensionality.

@@ -14,7 +14,11 @@ index into `WikidataEntitySource(vector_index=...)` -- so `search`/`get`
 never touch the network at all.
 
 A real large-scale build follows the exact same `build`/`save`/`load` API,
-just over many more entities.
+just streamed from many more entities -- e.g.
+[`WikidataDumpEntities`](../reference/sources.md), which reads a downloaded
+Wikidata dump directly, in place of `_ITEMS` in the script below. See
+[Entity Sources](../datasets/sources.md#building-from-a-real-wikidata-dump)
+for that variant.
 
 Requires the `vector-index` optional dependency (`faiss-cpu` +
 `sentence-transformers`; the latter downloads a small model the first time

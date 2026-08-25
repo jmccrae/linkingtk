@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import gzip
+import json
 import pickle
 import sys
 import types
@@ -11,7 +13,11 @@ import pytest
 
 from linkingtk.core import Entity
 from linkingtk.sources.vector_index import VectorIndexEntitySource
-from linkingtk.sources.wikidata import WikidataEntitySource, _instance_of_qids
+from linkingtk.sources.wikidata import (
+    WikidataDumpEntities,
+    WikidataEntitySource,
+    _instance_of_qids,
+)
 
 
 class _FakeResponse:
@@ -192,6 +198,117 @@ class TestInstanceOfQids:
     def test_non_value_snak_is_skipped(self) -> None:
         claims = {"P31": [{"mainsnak": {"snaktype": "novalue"}}]}
         assert _instance_of_qids(claims) == []
+
+
+def _dump_text(rows: list[dict[str, Any]]) -> str:
+    """Line-delimited-JSON-array text, the shape of Wikidata's real dump."""
+    lines = ["["]
+    for i, row in enumerate(rows):
+        suffix = "," if i < len(rows) - 1 else ""
+        lines.append(json.dumps(row) + suffix)
+    lines.append("]")
+    return "\n".join(lines) + "\n"
+
+
+_DUMP_ROWS = [
+    {
+        "type": "item",
+        "id": "Q90",
+        "labels": {"en": {"language": "en", "value": "Paris"}},
+        "descriptions": {"en": {"language": "en", "value": "capital of France"}},
+        "aliases": {},
+        "claims": {},
+    },
+    {
+        "type": "item",
+        "id": "Q5",
+        "labels": {"en": {"language": "en", "value": "human"}},
+        "descriptions": {},
+        "aliases": {"en": [{"language": "en", "value": "Homo sapiens"}]},
+        "claims": {"P31": [{"mainsnak": {"datavalue": {"value": {"id": "Q123"}}}}]},
+    },
+    {
+        "type": "property",
+        "id": "P31",
+        "labels": {"en": {"language": "en", "value": "instance of"}},
+    },
+    {
+        "type": "item",
+        "id": "Q999",
+        "labels": {},
+        "descriptions": {},
+        "aliases": {},
+        "claims": {},
+    },
+]
+
+
+class TestWikidataDumpEntities:
+    def test_reads_items_and_skips_non_items_and_unlabeled(self, tmp_path: Path) -> None:
+        dump_path = tmp_path / "dump.json"
+        dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
+
+        entities = list(WikidataDumpEntities(dump_path))
+
+        # P31 (a property, not an item) and Q999 (no "en" label) are both skipped.
+        assert [e.id for e in entities] == ["Q90", "Q5"]
+
+    def test_aliases_are_folded_into_labels(self, tmp_path: Path) -> None:
+        dump_path = tmp_path / "dump.json"
+        dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
+
+        entities = {e.id: e for e in WikidataDumpEntities(dump_path)}
+
+        assert entities["Q5"].labels == ["human", "Homo sapiens"]
+        assert entities["Q5"].properties == {"instance_of": "Q123"}
+
+    def test_gzip_dump_is_read_transparently(self, tmp_path: Path) -> None:
+        dump_path = tmp_path / "dump.json.gz"
+        with gzip.open(dump_path, "wt", encoding="utf-8") as f:
+            f.write(_dump_text(_DUMP_ROWS))
+
+        entities = list(WikidataDumpEntities(dump_path))
+
+        assert [e.id for e in entities] == ["Q90", "Q5"]
+
+    def test_limit_stops_early(self, tmp_path: Path) -> None:
+        dump_path = tmp_path / "dump.json"
+        dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
+
+        entities = list(WikidataDumpEntities(dump_path, limit=1))
+
+        assert [e.id for e in entities] == ["Q90"]
+
+    def test_reiterable_yields_same_result_twice(self, tmp_path: Path) -> None:
+        dump_path = tmp_path / "dump.json"
+        dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
+        dump = WikidataDumpEntities(dump_path)
+
+        assert [e.id for e in dump] == [e.id for e in dump]
+
+    def test_malformed_json_line_is_skipped(self, tmp_path: Path) -> None:
+        dump_path = tmp_path / "dump.json"
+        dump_path.write_text(
+            "[\n" + json.dumps(_DUMP_ROWS[0]) + ",\nnot valid json,\n"
+            + json.dumps(_DUMP_ROWS[1]) + "\n]\n",
+            encoding="utf-8",
+        )
+
+        entities = list(WikidataDumpEntities(dump_path))
+
+        assert [e.id for e in entities] == ["Q90", "Q5"]
+
+    def test_builds_a_vector_index_end_to_end(
+        self, tmp_path: Path, fake_faiss: types.ModuleType
+    ) -> None:
+        dump_path = tmp_path / "dump.json"
+        dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
+
+        index = VectorIndexEntitySource.build(
+            WikidataDumpEntities(dump_path), _FakeEmbedder(), tmp_path / "idx", reduced_dim=2
+        )
+
+        assert [e.id for e in index.search("Paris", top_k=1)] == ["Q90"]
 
 
 class TestConstruction:
