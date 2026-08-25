@@ -130,6 +130,8 @@
 
 ::: linkingtk.algorithms.wsd._ewiser_decoder
 
+::: linkingtk.algorithms.wsd._ewiser_sense_embeddings
+
 ::: linkingtk.algorithms.wsd._ewiser_text
 
 ### ESC

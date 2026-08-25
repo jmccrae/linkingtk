@@ -8,11 +8,16 @@ published numbers.** Unlike `ewiser_reproduction.py` (a hard acceptance
 gate for issue #40), this script has no such bar: EWISER's own published
 results critically depend on initializing the output layer
 (`decoder.logits.weight`) from externally pretrained LMMS/SensEmBERT
-sense embeddings (Section 3.4 of the paper) -- vectors this package
-doesn't bundle or reproduce (tracked separately, issue #57). From-scratch
-training here starts that layer randomly, and trains on a small
-`_TRAIN_DOCS`-document slice of SemCor for a handful of epochs, not the
-full corpus. This exists to verify the *training path itself* --
+sense embeddings (Section 3.4 of the paper). Issue #57 added loaders for
+those vectors (`load_synset_centroid_vectors`/
+`build_synset_centroid_vectors_from_lmms` in
+`linkingtk.algorithms.wsd._ewiser_sense_embeddings`, exercised against
+real downloaded vector files in
+`examples/ewiser_pretrained_output_embedding.py`), but this script
+doesn't use them -- from-scratch training here starts that layer
+randomly, and trains on a small `_TRAIN_DOCS`-document slice of SemCor
+for a handful of epochs, not the full corpus. This exists to verify the
+*training path itself* --
 `EwiserTrainer`'s cross-entropy loss, per-sentence batching, and
 freeze/unfreeze schedule all work correctly on real data and a real
 pretrained encoder -- not to reproduce the paper's numbers.

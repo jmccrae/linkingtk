@@ -89,6 +89,32 @@ class TestEncoderScore:
             EwiserEncoder(model_name_or_path=_TINY_MODEL)
 
 
+class TestOutputEmbeddingInit:
+    def test_replaces_the_random_default_output_weight(self) -> None:
+        vocabulary = _vocab()
+        init = torch.arange(len(vocabulary) * 8, dtype=torch.float32).reshape(len(vocabulary), 8)
+
+        encoder = EwiserEncoder(
+            model_name_or_path=_TINY_MODEL,
+            vocabulary=vocabulary,
+            decoder_hidden_dim=8,
+            output_embedding_init=init,
+        )
+
+        assert torch.equal(encoder.decoder.logits.weight.data, init)
+
+    def test_wrong_shape_raises(self) -> None:
+        wrong_shape = torch.zeros(len(_vocab()), 4)  # decoder_hidden_dim=8 below, not 4
+
+        with pytest.raises(LinkingTKError, match="output_embedding_init"):
+            EwiserEncoder(
+                model_name_or_path=_TINY_MODEL,
+                vocabulary=_vocab(),
+                decoder_hidden_dim=8,
+                output_embedding_init=wrong_shape,
+            )
+
+
 class TestEncoderFreezing:
     def test_freeze_encoder_true_gives_encoder_no_gradients(self) -> None:
         encoder = EwiserEncoder(

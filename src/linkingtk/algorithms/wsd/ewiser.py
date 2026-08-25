@@ -129,6 +129,18 @@ class EwiserEncoder(nn.Module):
         dropout: Decoder dropout rate. Checkpoint loading doesn't restore
             this (dropout has no learned parameters), so it only affects
             `EwiserTrainer`-driven training.
+        output_embedding_init: An optional ``[len(vocabulary),
+            decoder_hidden_dim]`` tensor to initialize
+            ``decoder.logits.weight`` from, in place of its default random
+            init -- see
+            [load_synset_centroid_vectors][linkingtk.algorithms.wsd._ewiser_sense_embeddings.load_synset_centroid_vectors]/
+            [build_synset_centroid_vectors_from_lmms][linkingtk.algorithms.wsd._ewiser_sense_embeddings.build_synset_centroid_vectors_from_lmms]
+            to build one. This is what makes
+            [EwiserTrainer.freeze_output_epochs][linkingtk.train.ewiser_trainer.EwiserTrainer]
+            meaningful -- freezing a *pretrained* output layer for a few
+            epochs protects it from noisy early gradients (the paper's own
+            motivation); freezing the layer's plain default random init
+            has no such benefit.
         num_summed_layers: The encoder input is the **sum** of the last
             `num_summed_layers` BERT hidden-state layers, not just the
             final layer -- confirmed against the reference's own
@@ -175,6 +187,7 @@ class EwiserEncoder(nn.Module):
         num_summed_layers: int = 4,
         max_length: int = 512,
         forward_batch_size: int = 16,
+        output_embedding_init: torch.Tensor | None = None,
     ) -> None:
         super().__init__()
         if vocabulary is None:
@@ -200,6 +213,16 @@ class EwiserEncoder(nn.Module):
             structured_logits_renormalize=structured_logits_renormalize,
             dropout=dropout,
         )
+        if output_embedding_init is not None:
+            expected_shape = (len(vocabulary), self.decoder.logits.weight.shape[1])
+            if tuple(output_embedding_init.shape) != expected_shape:
+                raise LinkingTKError(
+                    f"output_embedding_init has shape {tuple(output_embedding_init.shape)}, "
+                    f"expected {expected_shape} (len(vocabulary), decoder_hidden_dim)."
+                )
+            self.decoder.logits.weight.data = output_embedding_init.to(
+                self.decoder.logits.weight.dtype
+            )
 
     @classmethod
     def from_checkpoint(

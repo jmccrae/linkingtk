@@ -107,13 +107,18 @@ class EwiserTrainer:
             layer) frozen -- matches the reference's own "freeze-then-thaw"
             schedule (Section 3.4.1 of the paper), which protects an
             externally-pretrained (LMMS/SensEmBERT) initialization from
-            noisy early gradients. Defaults to ``0`` (single-stage): this
-            package doesn't bundle those pretrained sense embeddings, and
+            noisy early gradients. Defaults to ``0`` (single-stage):
             freezing a *randomly initialized* output layer for a few
-            epochs has no comparable benefit -- pass a nonzero value
-            explicitly when continuing training from one of the
-            published checkpoints, whose output layer *is* meaningfully
-            pretrained.
+            epochs has no comparable benefit -- pass a nonzero value only
+            when `model` was built with a real pretrained
+            `output_embedding_init` (see
+            [load_synset_centroid_vectors][linkingtk.algorithms.wsd._ewiser_sense_embeddings.load_synset_centroid_vectors]/
+            [build_synset_centroid_vectors_from_lmms][linkingtk.algorithms.wsd._ewiser_sense_embeddings.build_synset_centroid_vectors_from_lmms]),
+            e.g. when continuing training from one of the published
+            checkpoints or from-scratch with LMMS/SensEmBERT vectors --
+            this package doesn't bundle those vector files themselves
+            (same as it doesn't bundle the published checkpoints), only
+            the loaders that consume them.
         output_freeze_lr: Learning rate for the leading
             `freeze_output_epochs` epochs. Only relevant when
             `freeze_output_epochs > 0`.

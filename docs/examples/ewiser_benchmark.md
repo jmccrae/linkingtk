@@ -13,14 +13,15 @@ happens.
 `ewiser_reproduction.md` (a hard acceptance gate for the checkpoint path),
 this script has no such bar. EWISER's own published results critically
 depend on initializing the output layer (`decoder.logits.weight`) from
-externally pretrained LMMS/SensEmBERT sense embeddings; this package
-doesn't bundle or reproduce those (tracked separately,
-[issue #57](https://github.com/jmccrae/linkingtk/issues/57)), so
-from-scratch training here starts that layer randomly. The point is to
-verify the *training code itself* -- `EwiserTrainer`'s cross-entropy
-loss, per-sentence batching, and freeze-then-thaw schedule -- end to end
-against a real pretrained encoder and real data, not to reproduce the
-paper's numbers.
+externally pretrained LMMS/SensEmBERT sense embeddings; loaders for those
+vectors were added in
+[issue #57](https://github.com/jmccrae/linkingtk/issues/57) (see
+[`ewiser_pretrained_output_embedding.md`](ewiser_pretrained_output_embedding.md)),
+but this script doesn't use them -- from-scratch training here starts
+that layer randomly. The point is to verify the *training code itself* --
+`EwiserTrainer`'s cross-entropy loss, per-sentence batching, and
+freeze-then-thaw schedule -- end to end against a real pretrained encoder
+and real data, not to reproduce the paper's numbers.
 
 This script does wire up EWISER's own distinguishing idea, the WordNet
 relation-graph propagation step (`build_relation_adjacency`) -- an
