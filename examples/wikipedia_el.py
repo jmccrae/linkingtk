@@ -1,10 +1,12 @@
 """Entity Linking against live Wikipedia, via the MediaWiki API.
 
-Links a mention straight to a Wikipedia page without downloading or
-materializing any dump: [`WikipediaEntitySource`](../reference/sources.md)
-queries the public MediaWiki search API on demand, and
-[`ExactMatch`](../reference/blocking.md) narrows those results down to the
-one whose title exactly matches the mention text before
+Disambiguates the mention "Paris" between the city and the Greek mythology
+figure, without downloading or materializing any Wikipedia dump:
+[`WikipediaEntitySource`](../reference/sources.md) queries the public
+MediaWiki search API on demand, stripping each hit's parenthetical
+disambiguator (e.g. "Paris (mythology)") out of its label and into its
+description so [`ExactMatch`](../reference/blocking.md) can still treat it
+as a candidate for the bare mention text. From there,
 [`StringSimilarityLinker`](../reference/algorithms.md) scores context
 against each candidate's intro paragraph -- the same Lesk-style word-overlap
 scoring used in `wn_wsd.py`, applied to EL instead of WSD.
@@ -29,8 +31,8 @@ def main() -> None:
     mentions = [
         Entity(
             id="m1",
-            labels=["Albert Einstein"],
-            context="developed the theory of relativity and won the Nobel Prize in Physics",
+            labels=["Paris"],
+            context="a figure from Greek mythology, a Trojan prince who abducted Helen",
         ),
     ]
     pages = CachingEntitySource(WikipediaEntitySource(lang="en"))
@@ -41,6 +43,7 @@ def main() -> None:
     results = linker.link(mentions, pages, blocking=ExactMatch())
     for result in results:
         print(f"{result.source_id} -> {result.target_id} (score={result.score})")
+        print(f"  alternatives: {result.alternatives}")
 
     target = pages.get(results[0].target_id)
     assert target is not None

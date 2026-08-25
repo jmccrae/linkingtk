@@ -6,7 +6,14 @@ from typing import Any
 
 import pytest
 
-from linkingtk.sources.wikipedia import WikipediaEntitySource, _clean_snippet
+from linkingtk.blocking import ExactMatch
+from linkingtk.core import Entity
+from linkingtk.sources.wikipedia import (
+    WikipediaEntitySource,
+    _clean_snippet,
+    _prefix_topic,
+    _split_title,
+)
 
 
 class _FakeResponse:
@@ -73,8 +80,10 @@ class TestSearch:
         results = source.search("Python")
 
         assert [e.id for e in results] == ["Python (programming language)", "Python (genus)"]
-        assert results[0].labels == ["Python (programming language)"]
-        assert results[0].description == "Python is a language"
+        assert results[0].labels == ["Python"]
+        assert results[0].description == "(programming language) Python is a language"
+        assert results[1].labels == ["Python"]
+        assert results[1].description == "(genus) a genus of snakes"
 
     def test_no_matches_returns_empty_list(self) -> None:
         session = _FakeSession()
@@ -136,6 +145,82 @@ class TestGet:
         source = WikipediaEntitySource(session=session)
 
         assert source.get("Nonexistent Page Xyz") is None
+
+    def test_disambiguated_title_strips_label_and_prefixes_description(self) -> None:
+        session = _FakeSession()
+        session._get_response = {
+            "query": {
+                "pages": {
+                    "1": {
+                        "pageid": 1,
+                        "title": "Paris (mythology)",
+                        "extract": "Paris is a figure from Greek mythology.",
+                    }
+                }
+            }
+        }
+        source = WikipediaEntitySource(session=session)
+
+        entity = source.get("Paris (mythology)")
+
+        assert entity is not None
+        assert entity.id == "Paris (mythology)"
+        assert entity.labels == ["Paris"]
+        assert entity.description == "(mythology) Paris is a figure from Greek mythology."
+
+
+class TestDisambiguationStripping:
+    """A bare-word mention (e.g. "Paris") only matches disambiguated
+    Wikipedia titles (e.g. "Paris (mythology)") through ExactMatch's
+    exact-label blocking if the parenthetical suffix is moved out of the
+    label -- confirmed by reproducing the failure end to end below.
+    """
+
+    def test_disambiguated_candidate_becomes_reachable_via_exact_match(self) -> None:
+        session = _FakeSession()
+        session._search_response = {
+            "query": {
+                "search": [
+                    {"title": "Paris", "pageid": 1, "snippet": "capital of France"},
+                    {
+                        "title": "Paris (mythology)",
+                        "pageid": 2,
+                        "snippet": "figure from Greek mythology",
+                    },
+                ]
+            }
+        }
+        source = WikipediaEntitySource(session=session)
+        mention = Entity(id="m1", labels=["Paris"])
+
+        pairs = ExactMatch().candidate_pairs([mention], source)
+
+        assert [entity2.id for _, entity2 in pairs] == ["Paris", "Paris (mythology)"]
+
+
+class TestSplitTitle:
+    def test_undisambiguated_title_is_unchanged(self) -> None:
+        assert _split_title("Albert Einstein") == ("Albert Einstein", None)
+
+    def test_disambiguated_title_splits_base_and_topic(self) -> None:
+        assert _split_title("Paris (mythology)") == ("Paris", "mythology")
+
+    def test_only_the_trailing_parenthetical_is_treated_as_a_disambiguator(self) -> None:
+        assert _split_title("Dodge (car manufacturer)") == ("Dodge", "car manufacturer")
+
+
+class TestPrefixTopic:
+    def test_no_topic_returns_text_unchanged(self) -> None:
+        assert _prefix_topic("a summary", None) == "a summary"
+
+    def test_topic_is_prepended(self) -> None:
+        assert _prefix_topic("a summary", "mythology") == "(mythology) a summary"
+
+    def test_topic_with_no_text_returns_just_the_topic(self) -> None:
+        assert _prefix_topic(None, "mythology") == "(mythology)"
+
+    def test_no_topic_and_no_text_returns_none(self) -> None:
+        assert _prefix_topic(None, None) is None
 
 
 class TestConstruction:

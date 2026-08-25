@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     import requests
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_DISAMBIGUATOR_RE = re.compile(r"^(?P<base>.+?)\s*\((?P<topic>[^()]+)\)$")
 
 _USER_AGENT = "linkingtk/0.1 (https://github.com/jmccrae/linkingtk)"
 
@@ -32,11 +33,50 @@ def _clean_snippet(snippet: str) -> str:
     return html.unescape(_HTML_TAG_RE.sub("", snippet))
 
 
+def _split_title(title: str) -> tuple[str, str | None]:
+    """Split a Wikipedia title into its bare label and disambiguating topic.
+
+    Wikipedia disambiguates same-named articles via a parenthetical title
+    suffix (e.g. ``"Paris (mythology)"``) rather than distinct labels the
+    way WordNet's lemmas do -- so
+    [ExactMatch][linkingtk.blocking.exact.ExactMatch]'s exact-label
+    blocking would never treat a disambiguated page as a candidate for a
+    bare-word mention (e.g. ``"Paris"``): confirmed directly,
+    ``ExactMatch().candidate_pairs([Entity(id="m", labels=["Paris"])],
+    WikipediaEntitySource())`` returns only the undisambiguated ``"Paris"``
+    page, never ``"Paris (mythology)"``, even though `search` itself
+    returns it. The label is stripped of the suffix so it can match; the
+    topic moves to the description instead (via `_prefix_topic`) so it
+    isn't just lost.
+    """
+    match = _DISAMBIGUATOR_RE.match(title)
+    if match is None:
+        return title, None
+    return match.group("base"), match.group("topic")
+
+
+def _prefix_topic(text: str | None, topic: str | None) -> str | None:
+    """Prepend a disambiguating topic (from `_split_title`) to `text`, e.g.
+    ``"(mythology) Paris ... is a figure from Greek mythology"``.
+    """
+    if topic is None:
+        return text
+    return f"({topic}) {text}" if text else f"({topic})"
+
+
 class WikipediaEntitySource(EntitySource):
     """Queries live Wikipedia, via the MediaWiki API, as an
     [EntitySource][linkingtk.core.source.EntitySource].
 
-    Entity ids are Wikipedia page titles.
+    Entity ids are Wikipedia page titles, kept exactly as Wikipedia has
+    them (including any parenthetical disambiguator, e.g.
+    ``"Paris (mythology)"``) so `get` can round-trip them. Labels, however,
+    have that disambiguator stripped (e.g. ``"Paris"``) with the topic
+    moved to the front of the description instead (e.g. ``"(mythology) ..."``)
+    -- see `_split_title` -- so that a bare-word mention can actually reach
+    a disambiguated page as a candidate through
+    [ExactMatch][linkingtk.blocking.exact.ExactMatch]'s exact-label
+    blocking.
 
     Args:
         lang: The Wikipedia language edition to query (e.g. ``"en"`` for
@@ -86,14 +126,17 @@ class WikipediaEntitySource(EntitySource):
         response = self._session.get(self._api_url, params=params, timeout=10)
         response.raise_for_status()
         hits = response.json()["query"]["search"]
-        return [
-            Entity(
-                id=hit["title"],
-                labels=[hit["title"]],
-                description=_clean_snippet(hit["snippet"]),
+        entities = []
+        for hit in hits:
+            label, topic = _split_title(hit["title"])
+            entities.append(
+                Entity(
+                    id=hit["title"],
+                    labels=[label],
+                    description=_prefix_topic(_clean_snippet(hit["snippet"]), topic),
+                )
             )
-            for hit in hits
-        ]
+        return entities
 
     def get(self, entity_id: str) -> Entity | None:
         """Look up a Wikipedia page by title, or ``None`` if it doesn't exist.
@@ -115,8 +158,9 @@ class WikipediaEntitySource(EntitySource):
         page = next(iter(pages.values()))
         if "missing" in page:
             return None
+        label, topic = _split_title(page["title"])
         return Entity(
             id=page["title"],
-            labels=[page["title"]],
-            description=page.get("extract") or None,
+            labels=[label],
+            description=_prefix_topic(page.get("extract") or None, topic),
         )
