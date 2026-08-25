@@ -37,6 +37,8 @@ nav:
       - Entity Linking:
           - ReFinED-style bi-encoder benchmark: examples/el_benchmarks.md
           - EL against live Wikipedia: examples/wikipedia_el.md
+          - EL against live Wikidata: examples/wikidata_el.md
+          - Fully-offline EL via a local vector index: examples/vector_index_el.md
       - Word Sense Disambiguation:
           - Lesk WSD: examples/lesk_wsd.md
           - WSD against live WordNet (wn): examples/wn_wsd.md

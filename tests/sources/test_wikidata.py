@@ -1,0 +1,332 @@
+from __future__ import annotations
+
+import pickle
+import sys
+import types
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pytest
+
+from linkingtk.core import Entity
+from linkingtk.sources.vector_index import VectorIndexEntitySource
+from linkingtk.sources.wikidata import WikidataEntitySource, _instance_of_qids
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict[str, Any], status_ok: bool = True) -> None:
+        self._payload = payload
+        self.status_ok = status_ok
+
+    def raise_for_status(self) -> None:
+        if not self.status_ok:
+            raise RuntimeError("HTTP error")
+
+    def json(self) -> dict[str, Any]:
+        return self._payload
+
+
+class _FakeSession:
+    def __init__(self) -> None:
+        # Mirrors requests.Session()'s own default User-Agent -- see
+        # test_wikipedia.py's _FakeSession for why this matters.
+        self.headers: dict[str, str] = {"User-Agent": "python-requests/2.99.0"}
+        self.calls: list[dict[str, Any]] = []
+        self._search_response: dict[str, Any] = {"search": []}
+        self._get_response: dict[str, Any] = {"entities": {}}
+
+    def get(self, url: str, params: dict[str, Any], timeout: float) -> _FakeResponse:
+        self.calls.append({"url": url, "params": params, "timeout": timeout})
+        if params.get("action") == "wbsearchentities":
+            return _FakeResponse(self._search_response)
+        return _FakeResponse(self._get_response)
+
+
+def _fake_requests_module() -> types.ModuleType:
+    module = types.ModuleType("requests")
+    module.Session = _FakeSession  # type: ignore[attr-defined]
+    return module
+
+
+@pytest.fixture(autouse=True)
+def fake_requests(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    module = _fake_requests_module()
+    monkeypatch.setitem(sys.modules, "requests", module)
+    return module
+
+
+class TestSearch:
+    def test_maps_hits_to_entities(self) -> None:
+        session = _FakeSession()
+        session._search_response = {
+            "search": [
+                {"id": "Q90", "label": "Paris", "description": "capital of France"},
+                {"id": "Q830149", "label": "Paris", "description": "city in Texas"},
+            ]
+        }
+        source = WikidataEntitySource(session=session)
+
+        results = source.search("Paris")
+
+        assert [e.id for e in results] == ["Q90", "Q830149"]
+        assert results[0].labels == ["Paris"]
+        assert results[0].description == "capital of France"
+
+    def test_no_matches_returns_empty_list(self) -> None:
+        source = WikidataEntitySource(session=_FakeSession())
+
+        assert source.search("nonexistent") == []
+
+    def test_top_k_forwarded_as_limit(self) -> None:
+        session = _FakeSession()
+        source = WikidataEntitySource(session=session)
+
+        source.search("Paris", top_k=3)
+
+        assert session.calls[0]["params"]["limit"] == 3
+
+    def test_hit_without_label_is_skipped(self) -> None:
+        session = _FakeSession()
+        session._search_response = {"search": [{"id": "Q1", "description": "no label field"}]}
+        source = WikidataEntitySource(session=session)
+
+        assert source.search("x") == []
+
+
+class TestGet:
+    def test_returns_matching_entity(self) -> None:
+        session = _FakeSession()
+        session._get_response = {
+            "entities": {
+                "Q30": {
+                    "id": "Q30",
+                    "labels": {"en": {"language": "en", "value": "United States"}},
+                    "descriptions": {"en": {"language": "en", "value": "country in North America"}},
+                    "claims": {},
+                }
+            }
+        }
+        source = WikidataEntitySource(session=session)
+
+        entity = source.get("Q30")
+
+        assert entity is not None
+        assert entity.id == "Q30"
+        assert entity.labels == ["United States"]
+        assert entity.description == "country in North America"
+        assert entity.properties == {}
+
+    def test_surfaces_instance_of_into_properties(self) -> None:
+        session = _FakeSession()
+        session._get_response = {
+            "entities": {
+                "Q5": {
+                    "id": "Q5",
+                    "labels": {"en": {"language": "en", "value": "human"}},
+                    "descriptions": {},
+                    "claims": {
+                        "P31": [
+                            {
+                                "mainsnak": {
+                                    "datavalue": {"value": {"id": "Q123"}},
+                                }
+                            },
+                            {
+                                "mainsnak": {
+                                    "datavalue": {"value": {"id": "Q456"}},
+                                }
+                            },
+                        ]
+                    },
+                }
+            }
+        }
+        source = WikidataEntitySource(session=session)
+
+        entity = source.get("Q5")
+
+        assert entity is not None
+        assert entity.properties == {"instance_of": "Q123 Q456"}
+
+    def test_missing_entity_marker_returns_none(self) -> None:
+        session = _FakeSession()
+        session._get_response = {"entities": {"Q999999999": {"id": "Q999999999", "missing": ""}}}
+        source = WikidataEntitySource(session=session)
+
+        assert source.get("Q999999999") is None
+
+    def test_top_level_api_error_returns_none(self) -> None:
+        # Wikidata reports an out-of-range QID as a top-level error rather
+        # than an "entities" payload with a "missing" marker -- confirmed
+        # directly against the live API.
+        session = _FakeSession()
+        session._get_response = {"error": {"code": "no-such-entity"}}
+        source = WikidataEntitySource(session=session)
+
+        assert source.get("Q999999999999") is None
+
+    def test_entity_without_requested_language_label_returns_none(self) -> None:
+        session = _FakeSession()
+        session._get_response = {
+            "entities": {"Q42": {"id": "Q42", "labels": {}, "descriptions": {}, "claims": {}}}
+        }
+        source = WikidataEntitySource(session=session)
+
+        assert source.get("Q42") is None
+
+
+class TestInstanceOfQids:
+    def test_extracts_qids_from_p31_claims(self) -> None:
+        claims = {
+            "P31": [
+                {"mainsnak": {"datavalue": {"value": {"id": "Q5"}}}},
+                {"mainsnak": {"datavalue": {"value": {"id": "Q123"}}}},
+            ]
+        }
+        assert _instance_of_qids(claims) == ["Q5", "Q123"]
+
+    def test_no_p31_claim_returns_empty_list(self) -> None:
+        assert _instance_of_qids({}) == []
+
+    def test_non_value_snak_is_skipped(self) -> None:
+        claims = {"P31": [{"mainsnak": {"snaktype": "novalue"}}]}
+        assert _instance_of_qids(claims) == []
+
+
+class TestConstruction:
+    def test_self_created_session_gets_descriptive_user_agent(self) -> None:
+        source = WikidataEntitySource()
+
+        assert "linkingtk" in source._session.headers["User-Agent"]
+
+    def test_caller_supplied_session_headers_are_untouched(self) -> None:
+        session = _FakeSession()
+        session.headers["User-Agent"] = "custom-agent/1.0"
+
+        WikidataEntitySource(session=session)
+
+        assert session.headers["User-Agent"] == "custom-agent/1.0"
+
+
+class _FakeEmbedder:
+    def __init__(self, dim: int = 26) -> None:
+        self.dim = dim
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        vectors = np.zeros((len(texts), self.dim), dtype=np.float32)
+        for row, text in enumerate(texts):
+            for char in text.lower():
+                if "a" <= char <= "z":
+                    vectors[row, ord(char) - ord("a")] += 1.0
+        return vectors
+
+
+class _FakeIndexFlatIP:
+    def __init__(self, dim: int) -> None:
+        self.dim = dim
+        self.vectors: list[np.ndarray] = []
+
+    def add(self, vectors: np.ndarray) -> None:
+        self.vectors.extend(vectors)
+
+    def search(self, queries: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+        n_queries = queries.shape[0]
+        if not self.vectors:
+            return (
+                np.zeros((n_queries, k), dtype=np.float32),
+                -np.ones((n_queries, k), dtype=np.int64),
+            )
+        matrix = np.stack(self.vectors)
+        scores = queries @ matrix.T
+        k_eff = min(k, matrix.shape[0])
+        order = np.argsort(-scores, axis=1)[:, :k_eff]
+        top_scores = np.take_along_axis(scores, order, axis=1)
+        if k_eff < k:
+            pad = k - k_eff
+            order = np.concatenate([order, -np.ones((n_queries, pad), dtype=np.int64)], axis=1)
+            top_scores = np.concatenate(
+                [top_scores, np.zeros((n_queries, pad), dtype=np.float32)], axis=1
+            )
+        return top_scores.astype(np.float32), order.astype(np.int64)
+
+
+def _write_index(index: _FakeIndexFlatIP, path: str) -> None:
+    with open(path, "wb") as f:
+        pickle.dump({"dim": index.dim, "vectors": index.vectors}, f)
+
+
+def _read_index(path: str) -> _FakeIndexFlatIP:
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    index = _FakeIndexFlatIP(data["dim"])
+    index.vectors = data["vectors"]
+    return index
+
+
+@pytest.fixture
+def fake_faiss(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    module = types.ModuleType("faiss")
+    module.IndexFlatIP = _FakeIndexFlatIP  # type: ignore[attr-defined]
+    module.write_index = _write_index  # type: ignore[attr-defined]
+    module.read_index = _read_index  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "faiss", module)
+    return module
+
+
+class TestVectorIndexBackend:
+    def test_search_delegates_to_vector_index_without_any_network_call(
+        self, tmp_path: Path, fake_faiss: types.ModuleType
+    ) -> None:
+        entities = [Entity(id="Q90", labels=["Paris"], description="capital of France")]
+        index = VectorIndexEntitySource.build(
+            entities, _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+        session = _FakeSession()
+        source = WikidataEntitySource(session=session, vector_index=index)
+
+        results = source.search("Paris")
+
+        assert [e.id for e in results] == ["Q90"]
+        assert session.calls == []
+
+    def test_get_prefers_vector_index_over_live_call(
+        self, tmp_path: Path, fake_faiss: types.ModuleType
+    ) -> None:
+        entities = [Entity(id="Q90", labels=["Paris"], description="capital of France")]
+        index = VectorIndexEntitySource.build(
+            entities, _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+        session = _FakeSession()
+        source = WikidataEntitySource(session=session, vector_index=index)
+
+        entity = source.get("Q90")
+
+        assert entity is not None
+        assert entity.description == "capital of France"
+        assert session.calls == []
+
+    def test_get_falls_back_to_live_call_on_index_miss(
+        self, tmp_path: Path, fake_faiss: types.ModuleType
+    ) -> None:
+        index = VectorIndexEntitySource.build(
+            [], _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+        session = _FakeSession()
+        session._get_response = {
+            "entities": {
+                "Q30": {
+                    "id": "Q30",
+                    "labels": {"en": {"language": "en", "value": "United States"}},
+                    "descriptions": {},
+                    "claims": {},
+                }
+            }
+        }
+        source = WikidataEntitySource(session=session, vector_index=index)
+
+        entity = source.get("Q30")
+
+        assert entity is not None
+        assert entity.labels == ["United States"]
+        assert len(session.calls) == 1

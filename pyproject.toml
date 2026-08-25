@@ -24,7 +24,9 @@ kge = [
 ]
 wn = ["wn>=0.9"]
 wikipedia = ["requests>=2.31"]
-all = ["linkingtk[graph,nlp,kge,wn,wikipedia]"]
+faiss = ["faiss-cpu>=1.8"]
+sentence-transformers = ["sentence-transformers>=3.0"]
+all = ["linkingtk[graph,nlp,kge,wn,wikipedia,faiss,sentence-transformers]"]
 
 [dependency-groups]
 dev = [
@@ -69,6 +71,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["sklearn.*", "scipy.*", "pykeen.*", "torch.*", "datasets.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["faiss.*", "sentence_transformers.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
