@@ -1359,6 +1359,7 @@ all = [
     { name = "pykeen" },
     { name = "rapidfuzz" },
     { name = "rdflib" },
+    { name = "requests" },
     { name = "spacy" },
     { name = "wn" },
 ]
@@ -1373,6 +1374,9 @@ kge = [
 ]
 nlp = [
     { name = "spacy" },
+]
+wikipedia = [
+    { name = "requests" },
 ]
 wn = [
     { name = "wn" },
@@ -1395,20 +1399,21 @@ docs = [
 requires-dist = [
     { name = "datasets", specifier = ">=2.19" },
     { name = "huggingface-hub", specifier = ">=0.24" },
-    { name = "linkingtk", extras = ["graph", "nlp", "kge", "wn"], marker = "extra == 'all'" },
+    { name = "linkingtk", extras = ["graph", "nlp", "kge", "wn", "wikipedia"], marker = "extra == 'all'" },
     { name = "networkx", marker = "extra == 'graph'", specifier = ">=3.0" },
     { name = "peft", specifier = ">=0.11" },
     { name = "pykeen", marker = "extra == 'kge'", specifier = ">=1.10" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rapidfuzz", marker = "extra == 'kge'", specifier = ">=3.14.5" },
     { name = "rdflib", marker = "extra == 'graph'", specifier = ">=7.0" },
+    { name = "requests", marker = "extra == 'wikipedia'", specifier = ">=2.31" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "scipy", specifier = ">=1.15" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = ">=3.7" },
     { name = "transformers", specifier = ">=4.40" },
     { name = "wn", marker = "extra == 'wn'", specifier = ">=0.9" },
 ]
-provides-extras = ["graph", "nlp", "kge", "wn", "all"]
+provides-extras = ["graph", "nlp", "kge", "wn", "wikipedia", "all"]
 
 [package.metadata.requires-dev]
 dev = [

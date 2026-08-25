@@ -36,6 +36,7 @@ nav:
           - KGE method benchmarks: examples/ea_kge_benchmarks.md
       - Entity Linking:
           - ReFinED-style bi-encoder benchmark: examples/el_benchmarks.md
+          - EL against live Wikipedia: examples/wikipedia_el.md
       - Word Sense Disambiguation:
           - Lesk WSD: examples/lesk_wsd.md
           - WSD against live WordNet (wn): examples/wn_wsd.md

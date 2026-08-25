@@ -23,7 +23,8 @@ kge = [
     "rapidfuzz>=3.14.5",
 ]
 wn = ["wn>=0.9"]
-all = ["linkingtk[graph,nlp,kge,wn]"]
+wikipedia = ["requests>=2.31"]
+all = ["linkingtk[graph,nlp,kge,wn,wikipedia]"]
 
 [dependency-groups]
 dev = [
