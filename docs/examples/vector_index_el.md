@@ -16,11 +16,12 @@ never touch the network at all.
 A real large-scale build follows the exact same `build`/`save`/`load` API,
 just over many more entities.
 
-Requires the `faiss` and `sentence-transformers` optional dependencies (the
-latter downloads a small model the first time it runs):
+Requires the `vector-index` optional dependency (`faiss-cpu` +
+`sentence-transformers`; the latter downloads a small model the first time
+it runs):
 
 ```bash
-uv pip install linkingtk[faiss,sentence-transformers]
+uv pip install linkingtk[vector-index]
 ```
 
 ```python

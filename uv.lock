@@ -1389,9 +1389,6 @@ all = [
     { name = "spacy" },
     { name = "wn" },
 ]
-faiss = [
-    { name = "faiss-cpu" },
-]
 graph = [
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1404,7 +1401,8 @@ kge = [
 nlp = [
     { name = "spacy" },
 ]
-sentence-transformers = [
+vector-index = [
+    { name = "faiss-cpu" },
     { name = "sentence-transformers" },
 ]
 wikipedia = [
@@ -1430,9 +1428,9 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = ">=2.19" },
-    { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.8" },
+    { name = "faiss-cpu", marker = "extra == 'vector-index'", specifier = ">=1.8" },
     { name = "huggingface-hub", specifier = ">=0.24" },
-    { name = "linkingtk", extras = ["graph", "nlp", "kge", "wn", "wikipedia", "faiss", "sentence-transformers"], marker = "extra == 'all'" },
+    { name = "linkingtk", extras = ["graph", "nlp", "kge", "wn", "wikipedia", "vector-index"], marker = "extra == 'all'" },
     { name = "networkx", marker = "extra == 'graph'", specifier = ">=3.0" },
     { name = "peft", specifier = ">=0.11" },
     { name = "pykeen", marker = "extra == 'kge'", specifier = ">=1.10" },
@@ -1442,12 +1440,12 @@ requires-dist = [
     { name = "requests", marker = "extra == 'wikipedia'", specifier = ">=2.31" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "scipy", specifier = ">=1.15" },
-    { name = "sentence-transformers", marker = "extra == 'sentence-transformers'", specifier = ">=3.0" },
+    { name = "sentence-transformers", marker = "extra == 'vector-index'", specifier = ">=3.0" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = ">=3.7" },
     { name = "transformers", specifier = ">=4.40" },
     { name = "wn", marker = "extra == 'wn'", specifier = ">=0.9" },
 ]
-provides-extras = ["graph", "nlp", "kge", "wn", "wikipedia", "faiss", "sentence-transformers", "all"]
+provides-extras = ["graph", "nlp", "kge", "wn", "wikipedia", "vector-index", "all"]
 
 [package.metadata.requires-dev]
 dev = [

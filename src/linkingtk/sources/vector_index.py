@@ -180,7 +180,7 @@ class VectorIndexEntitySource(EntitySource):
         try:
             import faiss
         except ImportError as exc:
-            raise OptionalDependencyError("VectorIndexEntitySource", "faiss") from exc
+            raise OptionalDependencyError("VectorIndexEntitySource", "vector-index") from exc
 
         extract = resolve_field(field)
         texts = [extract(entity) for entity in entities]
@@ -249,7 +249,7 @@ class VectorIndexEntitySource(EntitySource):
         try:
             import faiss
         except ImportError as exc:
-            raise OptionalDependencyError("VectorIndexEntitySource", "faiss") from exc
+            raise OptionalDependencyError("VectorIndexEntitySource", "vector-index") from exc
 
         path.mkdir(parents=True, exist_ok=True)
         faiss.write_index(self._index, str(path / "index.faiss"))
@@ -277,7 +277,7 @@ class VectorIndexEntitySource(EntitySource):
         try:
             import faiss
         except ImportError as exc:
-            raise OptionalDependencyError("VectorIndexEntitySource", "faiss") from exc
+            raise OptionalDependencyError("VectorIndexEntitySource", "vector-index") from exc
 
         index = faiss.read_index(str(path / "index.faiss"))
         meta = json.loads((path / "meta.json").read_text())

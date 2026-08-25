@@ -15,10 +15,11 @@ reloaded index into `WikidataEntitySource(vector_index=...)` -- so `search`/
 A real large-scale build follows the exact same `build`/`save`/`load` API,
 just over many more entities.
 
-Requires the `faiss` and `sentence-transformers` optional dependencies (the
-latter downloads a small model the first time it runs):
+Requires the `vector-index` optional dependency (`faiss-cpu` +
+`sentence-transformers`; the latter downloads a small model the first time
+it runs):
 
-    uv pip install linkingtk[faiss,sentence-transformers]
+    uv pip install linkingtk[vector-index]
 
 Run with: `uv run python examples/vector_index_el.py`
 """
