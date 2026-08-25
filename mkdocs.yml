@@ -36,20 +36,22 @@ nav:
           - KGE method benchmarks: examples/ea_kge_benchmarks.md
       - Entity Linking:
           - ReFinED-style bi-encoder benchmark: examples/el_benchmarks.md
-      - Lesk WSD: examples/lesk_wsd.md
-      - WSD against live WordNet (wn): examples/wn_wsd.md
-      - GlossBERT reproduction: examples/glossbert_reproduction.md
-      - GlossBERT training verification: examples/glossbert_benchmark.md
-      - GlossBERT full-corpus training: examples/glossbert_full_training.md
-      - EWISER reproduction: examples/ewiser_reproduction.md
-      - EWISER training verification: examples/ewiser_benchmark.md
-      - ESC reproduction: examples/esc_reproduction.md
-      - ESC training verification: examples/esc_benchmark.md
+      - Word Sense Disambiguation:
+          - Lesk WSD: examples/lesk_wsd.md
+          - WSD against live WordNet (wn): examples/wn_wsd.md
+          - GlossBERT reproduction: examples/glossbert_reproduction.md
+          - GlossBERT training verification: examples/glossbert_benchmark.md
+          - GlossBERT full-corpus training: examples/glossbert_full_training.md
+          - EWISER reproduction: examples/ewiser_reproduction.md
+          - EWISER training verification: examples/ewiser_benchmark.md
+          - ESC reproduction: examples/esc_reproduction.md
+          - ESC training verification: examples/esc_benchmark.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
   - Datasets:
       - Overview: datasets/index.md
       - Toy datasets: datasets/toy.md
       - Entity alignment datasets: datasets/real_world_ea.md
+      - Entity linking datasets: datasets/entity_linking.md
       - Word sense disambiguation datasets: datasets/wsd.md
   - API Reference:
       - Core: reference/core.md
