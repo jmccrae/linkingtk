@@ -39,6 +39,7 @@ nav:
           - EL against live Wikipedia: examples/wikipedia_el.md
           - EL against live Wikidata: examples/wikidata_el.md
           - Fully-offline EL via a local vector index: examples/vector_index_el.md
+          - Building a vector index from a real Wikidata dump: examples/build_wikidata_vector_index.md
       - Word Sense Disambiguation:
           - Lesk WSD: examples/lesk_wsd.md
           - WSD against live WordNet (wn): examples/wn_wsd.md

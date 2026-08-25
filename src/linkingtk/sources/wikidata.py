@@ -14,10 +14,14 @@ dump to build one.
 from __future__ import annotations
 
 import gzip
+import io
 import json
+import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any, cast
+
+from tqdm import tqdm
 
 from linkingtk.core.entity import Entity
 from linkingtk.core.source import EntitySource
@@ -28,6 +32,10 @@ if TYPE_CHECKING:
     import requests
 
 _USER_AGENT = "linkingtk/0.1 (https://github.com/jmccrae/linkingtk)"
+
+
+def _is_url(path: str) -> bool:
+    return path.startswith(("http://", "https://"))
 
 
 def _instance_of_qids(claims: dict[str, Any]) -> list[str]:
@@ -77,31 +85,56 @@ class WikidataDumpEntities:
     (``wikidata_faiss/extract_dump_labels.py``, which instead expects an
     already-filtered, already-sorted N-Triples export).
 
-    Re-iterable -- `__iter__` reopens and re-reads the file every call --
-    so it can be passed straight to
+    Re-iterable -- `__iter__` reopens (re-requests the URL, or re-opens the
+    local file) and re-reads from the start every call -- so it can be
+    passed straight to
     [VectorIndexEntitySource.build][linkingtk.sources.vector_index.VectorIndexEntitySource.build]
     even with `reduced_dim` set (which needs two passes over its input); a
     plain generator can't do that, since it's exhausted after one pass.
 
     Args:
-        path: Path to the dump file. Gzip-decompressed on the fly if its
-            name ends in ``.gz`` (as the official dump does).
+        path: Path to the dump file, or an ``http(s)://`` URL to stream it
+            from directly (e.g. Wikidata's own dump mirrors) -- fetched
+            fresh, never cached to disk, since the whole point is not
+            having to hold a multi-hundred-GB file locally. Either way,
+            gzip-decompressed on the fly if the name ends in ``.gz`` (as
+            the official dump does).
         lang: Which language's label/description/aliases to read -- see
             `WikidataEntitySource`.
         limit: Stop after yielding this many entities, e.g. for a quick
             local test against a full multi-hundred-GB dump.
+        progress: Show a `tqdm` progress bar (lines read, entities
+            yielded) while iterating -- this can run for hours over a full
+            dump, so some feedback matters. Pass `False` to disable.
     """
 
-    def __init__(self, path: str | Path, lang: str = "en", limit: int | None = None) -> None:
-        self.path = Path(path)
+    def __init__(
+        self,
+        path: str | Path,
+        lang: str = "en",
+        limit: int | None = None,
+        progress: bool = True,
+    ) -> None:
+        self.path = path if isinstance(path, str) and _is_url(path) else Path(path)
         self.lang = lang
         self.limit = limit
+        self.progress = progress
+
+    def _open_binary(self) -> IO[bytes]:
+        if isinstance(self.path, str):
+            request = urllib.request.Request(self.path, headers={"User-Agent": _USER_AGENT})
+            raw: IO[bytes] = urllib.request.urlopen(request)  # noqa: S310
+            is_gzip = self.path.endswith(".gz")
+        else:
+            raw = self.path.open("rb")
+            is_gzip = self.path.name.endswith(".gz")
+        return cast("IO[bytes]", gzip.GzipFile(fileobj=raw)) if is_gzip else raw
 
     def __iter__(self) -> Iterator[Entity]:
-        opener = gzip.open if self.path.name.endswith(".gz") else open
         count = 0
-        with opener(self.path, "rt", encoding="utf-8") as f:
-            for line in f:
+        with io.TextIOWrapper(self._open_binary(), encoding="utf-8") as f:
+            lines = tqdm(f, desc=str(self.path), unit=" lines", disable=not self.progress)
+            for line in lines:
                 stripped = line.strip().rstrip(",")
                 if stripped in ("", "[", "]"):
                     continue
@@ -114,8 +147,9 @@ class WikidataDumpEntities:
                 entity = _entity_from_wikidata_json(data, self.lang)
                 if entity is None:
                     continue
-                yield entity
                 count += 1
+                lines.set_postfix(entities=count)
+                yield entity
                 if self.limit is not None and count >= self.limit:
                     return
 

@@ -147,16 +147,28 @@ N-Triples intermediate file):
 ```python
 from linkingtk.sources import WikidataDumpEntities, VectorIndexEntitySource
 
-dump = WikidataDumpEntities("latest-all.json.gz", lang="en")
+dump = WikidataDumpEntities(
+    "https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz", lang="en"
+)
 VectorIndexEntitySource.build(dump, embedder, Path("wikidata_index"))
 ```
 
-`WikidataDumpEntities` is re-iterable — each `for` loop over it reopens
-and re-reads the file from the start — which is what lets `build()` make
-its two passes (fitting the SVD sample, then indexing) directly over a
-dump file without ever loading it all into memory. A plain one-off
-generator can't do this: pass `reduced_dim=None` if you want to index
-from a true single-use iterator instead.
+`path` accepts either a local path or an `http(s)://` URL, streamed
+directly (never downloaded to disk first — the whole point is not
+needing to hold a multi-hundred-GB file locally). `WikidataDumpEntities`
+is re-iterable — each `for` loop over it re-requests the URL (or
+re-opens the local file) and reads from the start — which is what lets
+`build()` make its two passes (fitting the SVD sample, then indexing)
+directly over a dump without ever loading it all into memory. A plain
+one-off generator can't do this: pass `reduced_dim=None` if you want to
+index from a true single-use iterator instead.
+
+This can run for hours over the full dump, so `WikidataDumpEntities`
+shows a `tqdm` progress bar by default (pass `progress=False` to turn it
+off). See [the standalone build
+script](../examples/build_wikidata_vector_index.md) for a real,
+runnable `uv run` command wrapping all of this with CLI flags, rather
+than writing the above by hand.
 
 ## Caching wrapper
 

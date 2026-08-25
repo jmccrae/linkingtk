@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import gzip
+import io
 import json
 import pickle
 import sys
 import types
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -14,9 +16,11 @@ import pytest
 from linkingtk.core import Entity
 from linkingtk.sources.vector_index import VectorIndexEntitySource
 from linkingtk.sources.wikidata import (
+    _USER_AGENT,
     WikidataDumpEntities,
     WikidataEntitySource,
     _instance_of_qids,
+    _is_url,
 )
 
 
@@ -248,7 +252,7 @@ class TestWikidataDumpEntities:
         dump_path = tmp_path / "dump.json"
         dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
 
-        entities = list(WikidataDumpEntities(dump_path))
+        entities = list(WikidataDumpEntities(dump_path, progress=False))
 
         # P31 (a property, not an item) and Q999 (no "en" label) are both skipped.
         assert [e.id for e in entities] == ["Q90", "Q5"]
@@ -257,7 +261,7 @@ class TestWikidataDumpEntities:
         dump_path = tmp_path / "dump.json"
         dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
 
-        entities = {e.id: e for e in WikidataDumpEntities(dump_path)}
+        entities = {e.id: e for e in WikidataDumpEntities(dump_path, progress=False)}
 
         assert entities["Q5"].labels == ["human", "Homo sapiens"]
         assert entities["Q5"].properties == {"instance_of": "Q123"}
@@ -267,7 +271,7 @@ class TestWikidataDumpEntities:
         with gzip.open(dump_path, "wt", encoding="utf-8") as f:
             f.write(_dump_text(_DUMP_ROWS))
 
-        entities = list(WikidataDumpEntities(dump_path))
+        entities = list(WikidataDumpEntities(dump_path, progress=False))
 
         assert [e.id for e in entities] == ["Q90", "Q5"]
 
@@ -275,14 +279,14 @@ class TestWikidataDumpEntities:
         dump_path = tmp_path / "dump.json"
         dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
 
-        entities = list(WikidataDumpEntities(dump_path, limit=1))
+        entities = list(WikidataDumpEntities(dump_path, limit=1, progress=False))
 
         assert [e.id for e in entities] == ["Q90"]
 
     def test_reiterable_yields_same_result_twice(self, tmp_path: Path) -> None:
         dump_path = tmp_path / "dump.json"
         dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
-        dump = WikidataDumpEntities(dump_path)
+        dump = WikidataDumpEntities(dump_path, progress=False)
 
         assert [e.id for e in dump] == [e.id for e in dump]
 
@@ -294,7 +298,7 @@ class TestWikidataDumpEntities:
             encoding="utf-8",
         )
 
-        entities = list(WikidataDumpEntities(dump_path))
+        entities = list(WikidataDumpEntities(dump_path, progress=False))
 
         assert [e.id for e in entities] == ["Q90", "Q5"]
 
@@ -305,10 +309,75 @@ class TestWikidataDumpEntities:
         dump_path.write_text(_dump_text(_DUMP_ROWS), encoding="utf-8")
 
         index = VectorIndexEntitySource.build(
-            WikidataDumpEntities(dump_path), _FakeEmbedder(), tmp_path / "idx", reduced_dim=2
+            WikidataDumpEntities(dump_path, progress=False),
+            _FakeEmbedder(),
+            tmp_path / "idx",
+            reduced_dim=2,
         )
 
         assert [e.id for e in index.search("Paris", top_k=1)] == ["Q90"]
+
+
+class TestIsUrl:
+    def test_http_url_is_detected(self) -> None:
+        assert _is_url("http://example.com/dump.json") is True
+
+    def test_https_url_is_detected(self) -> None:
+        assert _is_url("https://example.com/dump.json.gz") is True
+
+    def test_local_path_is_not_a_url(self) -> None:
+        assert _is_url("/tmp/dump.json") is False
+        assert _is_url("dump.json") is False
+
+
+class TestWikidataDumpEntitiesUrl:
+    def test_reads_from_plain_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        content = _dump_text(_DUMP_ROWS).encode("utf-8")
+        requests: list[urllib.request.Request] = []
+
+        def fake_urlopen(request: urllib.request.Request, *args: Any, **kwargs: Any) -> io.BytesIO:
+            requests.append(request)
+            return io.BytesIO(content)
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+        entities = list(WikidataDumpEntities("http://example.com/dump.json", progress=False))
+
+        assert [e.id for e in entities] == ["Q90", "Q5"]
+        assert requests[0].full_url == "http://example.com/dump.json"
+        headers = {k.lower(): v for k, v in requests[0].header_items()}
+        assert headers["user-agent"] == _USER_AGENT
+
+    def test_reads_from_gzip_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        compressed = gzip.compress(_dump_text(_DUMP_ROWS).encode("utf-8"))
+
+        def fake_urlopen(request: urllib.request.Request, *args: Any, **kwargs: Any) -> io.BytesIO:
+            return io.BytesIO(compressed)
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+        entities = list(
+            WikidataDumpEntities("https://example.com/dump.json.gz", progress=False)
+        )
+
+        assert [e.id for e in entities] == ["Q90", "Q5"]
+
+    def test_reiterating_url_source_requests_again(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        content = _dump_text(_DUMP_ROWS).encode("utf-8")
+        call_count = 0
+
+        def fake_urlopen(request: urllib.request.Request, *args: Any, **kwargs: Any) -> io.BytesIO:
+            nonlocal call_count
+            call_count += 1
+            return io.BytesIO(content)
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+        dump = WikidataDumpEntities("http://example.com/dump.json", progress=False)
+
+        list(dump)
+        list(dump)
+
+        assert call_count == 2
 
 
 class TestConstruction:
