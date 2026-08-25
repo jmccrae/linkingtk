@@ -206,7 +206,12 @@ print(report.metrics)
 
 We should have loaders and supports for the main datasets across all four major
 tasks. We should try to load datasets from their source using custom loaders,
-but we may need to republish on HuggingFace Hub for some datasets
+but we may need to republish on HuggingFace Hub for some datasets --
+`linkingtk.datasets.hub_publish` provides the general packaging/upload
+tooling for this (see UFSAC below for the one dataset it's actually
+been applied to; AIDA-CoNLL/Zeshel instead route through existing
+community republishes, and DaMuEL/LCQuAD 2.0 stream fine from their
+original hosts, so neither needed a linkingtk-owned copy).
 
 ### Entity Alignment Datasets
 
@@ -267,7 +272,19 @@ Toy datasets:
 
 ### Word Sense Disambiguation Datasets
 
-- UFSAC: https://github.com/getalp/UFSAC
+- UFSAC: https://github.com/getalp/UFSAC -- implemented,
+   `linkingtk.datasets.ufsac.UfsacDataset`. Distributed as a single
+   Google Drive archive bundling 16+ corpora with no fetchable per-file
+   URL, so `source` needs a local download by default.
+   `examples/publish_ufsac.py` (using the generic
+   `linkingtk.datasets.hub_publish` tooling, see below) can republish
+   the corpora with a clear open license (`semcor.xml`, `wngt.xml`,
+   `masc.xml`, `omsti.xml`) to a `linkingtk/ufsac` Hugging Face Hub
+   repo. UFSAC's SensEval/SemEval all-words and lexical-sample corpora
+   (`raganato_*.xml` and friends) are deliberately excluded from that
+   allowlist -- their text is sourced from the LDC-licensed Wall Street
+   Journal/Penn Treebank corpus, the same tier as TAC KBP below, so they
+   stay local-path-only.
 - SemCor 2026: https://github.com/globalwordnet/semcor/
 
 ### Word Sense Alignment

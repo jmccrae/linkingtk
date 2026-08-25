@@ -1341,6 +1341,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
+    { name = "huggingface-hub" },
     { name = "peft" },
     { name = "pyyaml" },
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1393,6 +1394,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = ">=2.19" },
+    { name = "huggingface-hub", specifier = ">=0.24" },
     { name = "linkingtk", extras = ["graph", "nlp", "kge", "wn"], marker = "extra == 'all'" },
     { name = "networkx", marker = "extra == 'graph'", specifier = ">=3.0" },
     { name = "peft", specifier = ">=0.11" },

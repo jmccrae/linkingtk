@@ -8,6 +8,7 @@ license = { text = "MIT" }
 dependencies = [
     "transformers>=4.40",
     "datasets>=2.19",
+    "huggingface-hub>=0.24",
     "peft>=0.11",
     "scikit-learn>=1.7.2",
     "scipy>=1.15",

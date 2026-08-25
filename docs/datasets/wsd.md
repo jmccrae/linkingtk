@@ -71,6 +71,13 @@ mentions, senses, ground_truth = UfsacDataset("~/ufsac-public-2.1/semcor.xml").l
 Since the parser handles UFSAC's one shared schema, this works for any of
 the 16+ corpora in the archive, not just `semcor.xml`.
 
+[`examples/publish_ufsac.py`](../examples/publish_ufsac.md) can
+republish the corpora with a clear open license (`semcor.xml`,
+`wngt.xml`, `masc.xml`, `omsti.xml`) to the Hugging Face Hub, giving
+`source` a stable URL instead of a manual download -- see that page for
+which corpora are excluded and why (some of UFSAC's bundled corpora are
+LDC-licensed and not linkingtk's to redistribute).
+
 UFSAC's WordNet 3.0 sense keys (e.g. `"group%1:03:00::"`) aren't `wn` ids,
 so `ground_truth` here is resolved through
 [`sensekey_to_synset_id`](../reference/sources.md) against `dataset2`'s

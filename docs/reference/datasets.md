@@ -65,3 +65,7 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 ## UFSAC
 
 ::: linkingtk.datasets.ufsac
+
+## Hugging Face Hub republishing tooling
+
+::: linkingtk.datasets.hub_publish
