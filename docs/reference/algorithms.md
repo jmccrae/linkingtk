@@ -32,6 +32,8 @@
 
 ::: linkingtk.algorithms.ea.iptranse
 
+::: linkingtk.algorithms.ea._iptranse_training
+
 ### JAPE
 
 ::: linkingtk.algorithms.ea.jape
@@ -39,6 +41,8 @@
 ### KDCoE
 
 ::: linkingtk.algorithms.ea.kdcoe
+
+::: linkingtk.algorithms.ea._kdcoe_text
 
 ### AttrE
 
@@ -59,6 +63,38 @@
 ### SEA
 
 ::: linkingtk.algorithms.ea.sea
+
+### BootEA
+
+::: linkingtk.algorithms.ea.bootea
+
+::: linkingtk.algorithms.ea._bootea_training
+
+### GCN-Align
+
+::: linkingtk.algorithms.ea.gcn_align
+
+::: linkingtk.algorithms.ea._gcn_align_training
+
+::: linkingtk.algorithms.ea._gcn_align_torch
+
+::: linkingtk.algorithms.ea._ea_losses
+
+### RDGCN
+
+::: linkingtk.algorithms.ea.rdgcn
+
+::: linkingtk.algorithms.ea._rdgcn_training
+
+::: linkingtk.algorithms.ea._rdgcn_torch
+
+### AliNet
+
+::: linkingtk.algorithms.ea.alinet
+
+::: linkingtk.algorithms.ea._alinet_training
+
+::: linkingtk.algorithms.ea._alinet_torch
 
 ## Entity Linking
 

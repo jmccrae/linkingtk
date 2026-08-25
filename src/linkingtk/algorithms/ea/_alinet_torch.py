@@ -60,18 +60,17 @@ def build_alinet_model(num_entities: int, layer_dims: list[int]) -> torch.nn.Mod
             ``[500, 400, 300]``.
 
     Returns:
-        A module with:
-
-        - ``set_adjacency(one_hop_adjacency, two_hop_adjacency)``: must be
-          called before the first ``forward()`` and again after every
-          bootstrapping round. Both are coalesced sparse
-          ``[num_entities, num_entities]`` tensors, e.g. from
-          [coo_to_torch_sparse][linkingtk.utils.sparse_gcn.coo_to_torch_sparse].
-        - ``forward() -> torch.Tensor``: returns
-          ``(num_entities, sum(layer_dims) + layer_dims[0])`` -- the
-          concatenated, L2-normalized multi-layer representation (every
-          layer's output plus the initial embedding, matching OpenEA's
-          own ``[input_embeds] + output_embeds_list`` concat order).
+        A module exposing ``set_adjacency(one_hop_adjacency,
+        two_hop_adjacency)`` (must be called before the first
+        ``forward()`` and again after every bootstrapping round; both
+        are coalesced sparse ``[num_entities, num_entities]`` tensors,
+        e.g. from
+        [coo_to_torch_sparse][linkingtk.utils.sparse_gcn.coo_to_torch_sparse])
+        and ``forward() -> torch.Tensor`` (returns ``(num_entities,
+        sum(layer_dims) + layer_dims[0])`` -- the concatenated,
+        L2-normalized multi-layer representation, every layer's output
+        plus the initial embedding, matching OpenEA's own
+        ``[input_embeds] + output_embeds_list`` concat order).
     """
     import torch
     import torch.nn.functional as functional

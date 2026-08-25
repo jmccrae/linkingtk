@@ -118,7 +118,7 @@ class _KGZipDataset(GraphDatasetLoader):
     ) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
         """Load this dataset's native train/test/validation ground-truth split.
 
-        Unlike [load][linkingtk.datasets.kg_zip._KGZipDataset.load]'s single
+        Unlike ``load()``'s single
         concatenated ``ground_truth``, this preserves the dataset's own
         supervised split -- the train pairs are meant to be added to the
         training graph as seed alignment triples (see

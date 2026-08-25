@@ -4,6 +4,8 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 
 ::: linkingtk.datasets.base
 
+::: linkingtk.datasets._util
+
 ## Toy datasets
 
 ::: linkingtk.datasets.toy
@@ -11,6 +13,12 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 ## Naisc ontology-matching datasets
 
 ::: linkingtk.datasets.naisc
+
+## Shared zip-archive dataset base
+
+::: linkingtk.datasets.kg_zip
+
+::: linkingtk.datasets.kg_zip._KGZipDataset
 
 ## DBP15K
 
@@ -23,6 +31,8 @@ See also the [Datasets](../datasets/index.md) page for usage examples.
 ## OpenEA (native format, with attributes)
 
 ::: linkingtk.datasets.openea_native
+
+::: linkingtk.datasets.openea_native._OpenEANativeDataset
 
 ## ICEWS
 
