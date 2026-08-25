@@ -53,11 +53,11 @@ nav:
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
   - Datasets:
       - Overview: datasets/index.md
-      - EntitySource-backed sources: datasets/sources.md
       - Toy datasets: datasets/toy.md
       - Entity alignment datasets: datasets/real_world_ea.md
       - Entity linking datasets: datasets/entity_linking.md
       - Word sense disambiguation datasets: datasets/wsd.md
+      - Entity Sources: datasets/sources.md
   - API Reference:
       - Core: reference/core.md
       - Sources: reference/sources.md

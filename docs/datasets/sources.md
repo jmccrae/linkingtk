@@ -1,4 +1,4 @@
-# EntitySource-backed sources
+# Entity Sources
 
 Every loader on the other pages in this section returns a fully
 materialized `list[Entity]` via `load()`. That doesn't work for a target
