@@ -4,7 +4,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from linkingtk.algorithms.wsd._ewiser_structured_logits import StructuredLogits  # noqa: E402
+from linkingtk.algorithms.wsd._ewiser_structured_logits import (  # noqa: E402
+    StructuredLogits,
+    _SparsePropagate,
+)
 
 
 def _adjacency(rows: list[int], cols: list[int], values: list[float], size: int) -> torch.Tensor:
@@ -61,6 +64,37 @@ class TestTrainable:
         module = StructuredLogits(adjacency, trainable=False)
 
         assert module.adjacency_pars[1].requires_grad is False
+
+
+class TestSparsePropagateGradient:
+    def test_forward_matches_a_dense_reference(self) -> None:
+        indices = torch.tensor([[0, 1, 2, 3], [1, 2, 0, 4]], dtype=torch.long)
+        values = torch.tensor([0.5, 1.5, -2.0, 3.0], dtype=torch.float64)
+        flat = torch.randn(3, 6, dtype=torch.float64)
+
+        out = _SparsePropagate.apply(indices, values, (6, 6), flat)
+
+        dense_adjacency = torch.zeros(6, 6, dtype=torch.float64)
+        for edge in range(indices.shape[1]):
+            dense_adjacency[indices[0, edge], indices[1, edge]] = values[edge]
+        expected = flat @ dense_adjacency.T
+        assert torch.allclose(out, expected, atol=1e-10)
+
+    def test_gradcheck(self) -> None:
+        # Verifies _SparsePropagate's O(nnz) backward against autograd's own
+        # numerical differentiation -- this is exactly the property the
+        # unfixed torch.sparse.mm-only version had (grad existed, per
+        # TestTrainable below, but a dense-materializing default backward
+        # would still pass that weaker check; gradcheck would not save it
+        # from being wrong, but does confirm this implementation is right).
+        indices = torch.tensor([[0, 1, 2, 3], [1, 2, 0, 4]], dtype=torch.long)
+        values = torch.randn(4, dtype=torch.float64, requires_grad=True)
+        flat = torch.randn(3, 6, dtype=torch.float64, requires_grad=True)
+
+        def f(values: torch.Tensor, flat: torch.Tensor) -> torch.Tensor:
+            return _SparsePropagate.apply(indices, values, (6, 6), flat)
+
+        assert torch.autograd.gradcheck(f, (values, flat), eps=1e-6, atol=1e-4)
 
 
 class TestStateDict:

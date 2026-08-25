@@ -49,6 +49,7 @@ nav:
           - EWISER reproduction: examples/ewiser_reproduction.md
           - EWISER training verification: examples/ewiser_benchmark.md
           - EWISER pretrained output embedding: examples/ewiser_pretrained_output_embedding.md
+          - EWISER full-corpus training: examples/ewiser_full_training.md
           - ESC reproduction: examples/esc_reproduction.md
           - ESC training verification: examples/esc_benchmark.md
           - Republishing UFSAC to the Hugging Face Hub: examples/publish_ufsac.md
