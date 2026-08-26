@@ -249,9 +249,10 @@ class VectorIndexEntitySource(EntitySource):
         ids_path = path / "ids.txt"
         entities_db_path = path / "entities.db"
 
-        with ids_path.open("w", encoding="utf-8") as ids_file, dbm.open(
-            str(entities_db_path), "n"
-        ) as entities_db:
+        with (
+            ids_path.open("w", encoding="utf-8") as ids_file,
+            dbm.open(str(entities_db_path), "n") as entities_db,
+        ):
             batch: list[Entity] = []
             batch_texts: list[str] = []
 

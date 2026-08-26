@@ -69,7 +69,7 @@ class TestSearch:
                     {
                         "title": "Python (programming language)",
                         "pageid": 1,
-                        "snippet": "<span class=\"searchmatch\">Python</span> is a language",
+                        "snippet": '<span class="searchmatch">Python</span> is a language',
                     },
                     {"title": "Python (genus)", "pageid": 2, "snippet": "a genus of snakes"},
                 ]

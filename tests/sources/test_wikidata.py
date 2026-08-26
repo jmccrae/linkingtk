@@ -293,8 +293,11 @@ class TestWikidataDumpEntities:
     def test_malformed_json_line_is_skipped(self, tmp_path: Path) -> None:
         dump_path = tmp_path / "dump.json"
         dump_path.write_text(
-            "[\n" + json.dumps(_DUMP_ROWS[0]) + ",\nnot valid json,\n"
-            + json.dumps(_DUMP_ROWS[1]) + "\n]\n",
+            "[\n"
+            + json.dumps(_DUMP_ROWS[0])
+            + ",\nnot valid json,\n"
+            + json.dumps(_DUMP_ROWS[1])
+            + "\n]\n",
             encoding="utf-8",
         )
 
@@ -356,9 +359,7 @@ class TestWikidataDumpEntitiesUrl:
 
         monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
-        entities = list(
-            WikidataDumpEntities("https://example.com/dump.json.gz", progress=False)
-        )
+        entities = list(WikidataDumpEntities("https://example.com/dump.json.gz", progress=False))
 
         assert [e.id for e in entities] == ["Q90", "Q5"]
 

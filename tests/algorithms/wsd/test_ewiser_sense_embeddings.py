@@ -80,9 +80,7 @@ class TestLoadSynsetCentroidVectors:
             "madeupword0000 0.0 0.0 0.0\n"  # not a "wn:" token -- skipped
             "wn:99999999n 9.0 9.0 9.0\n"  # unresolvable offset -- skipped
         )
-        vocabulary = SenseVocabulary.from_wn(
-            ["omw-en-02084071-n", "omw-en-00007846-n"], nspecial=1
-        )
+        vocabulary = SenseVocabulary.from_wn(["omw-en-02084071-n", "omw-en-00007846-n"], nspecial=1)
         base = torch.full((len(vocabulary), 3), -1.0)
 
         result, matched = load_synset_centroid_vectors(
@@ -184,9 +182,7 @@ class TestBuildSynsetCentroidVectorsFromLmms:
             "b%1:01:00:: 0.0 1.0 0.0 0.0\n"
             "c%1:01:00:: 0.0 0.0 1.0 0.0\n"
         )
-        vocabulary = SenseVocabulary.from_wn(
-            ["omw-en-a-n", "omw-en-b-n", "omw-en-c-n"], nspecial=0
-        )
+        vocabulary = SenseVocabulary.from_wn(["omw-en-a-n", "omw-en-b-n", "omw-en-c-n"], nspecial=0)
         base = torch.zeros(len(vocabulary), 2)
 
         _result, matched = build_synset_centroid_vectors_from_lmms(
