@@ -1571,9 +1571,9 @@ dependencies = [
 all = [
     { name = "anthropic" },
     { name = "faiss-cpu" },
+    { name = "gensim" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "node2vec" },
     { name = "openai" },
     { name = "pykeen" },
     { name = "rapidfuzz" },
@@ -1589,7 +1589,9 @@ graph = [
     { name = "rdflib" },
 ]
 kge = [
-    { name = "node2vec" },
+    { name = "gensim" },
+    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pykeen" },
     { name = "rapidfuzz" },
 ]
@@ -1630,10 +1632,11 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.40" },
     { name = "datasets", specifier = ">=2.19" },
     { name = "faiss-cpu", marker = "extra == 'vector-index'", specifier = ">=1.8" },
+    { name = "gensim", marker = "extra == 'kge'", specifier = ">=4.0" },
     { name = "huggingface-hub", specifier = ">=0.24" },
     { name = "linkingtk", extras = ["graph", "nlp", "kge", "wn", "wikipedia", "vector-index", "llm"], marker = "extra == 'all'" },
     { name = "networkx", marker = "extra == 'graph'", specifier = ">=3.0" },
-    { name = "node2vec", marker = "extra == 'kge'", specifier = ">=0.5.0" },
+    { name = "networkx", marker = "extra == 'kge'", specifier = ">=3.0" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.50" },
     { name = "peft", specifier = ">=0.11" },
     { name = "pykeen", marker = "extra == 'kge'", specifier = ">=1.10" },
@@ -2299,23 +2302,6 @@ resolution-markers = [
 sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
-]
-
-[[package]]
-name = "node2vec"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "gensim" },
-    { name = "joblib" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "numpy" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/23/b5/ce1a0305d1dbd302f4c5136d88f4278c153a29d61b2f519672715d48c5e3/node2vec-0.5.0.tar.gz", hash = "sha256:0068e79da9893017b5bee072a735b6e9b266e8e67df44ca85b3a7abbbc13d07c", size = 5564, upload-time = "2024-08-02T11:12:25.175Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b9/ca/d3bedf079e1132dfb5c8bcfac721dc11a1cd8064c9472d22ffa2c23c9ce3/node2vec-0.5.0-py3-none-any.whl", hash = "sha256:8bdbc11baa6e17ba58219c91da09624db01de7f10b2f6a445b3fd20ec5edcc15", size = 7206, upload-time = "2024-08-02T11:12:23.417Z" },
 ]
 
 [[package]]

@@ -16,7 +16,7 @@ both embedding matrices *before* its `sim_handler`'s raw `matmul`
 (`main_SimpleHHEA.py`'s `evaluate()`), making that raw matmul equivalent
 to cosine similarity, not an unnormalized inner product.
 
-Requires the `kge` optional dependency group (for `node2vec`/`gensim`) --
+Requires the `kge` optional dependency group (for `networkx`/`gensim`) --
 install with `uv sync --extra kge`. Fetches ICEWS-WIKI's zip over the
 network the first time it's run (~75MB, includes ~3.5M ICEWS event
 triples); cached under ~/.cache/linkingtk/downloads after that. Trains on
@@ -24,19 +24,28 @@ GPU (device="cuda") -- this is a large, heterogeneous dataset (~27K
 entities combined), unlike the toy/15K-scale fixtures most other EA
 benchmarks in this repo use.
 
-ICEWS-WIKI's combined graph has an extreme power-law degree distribution
-(median node degree 18, one node with 273,317 edges -- measured directly),
-which makes node2vec's per-edge alias-table precompute (`O(degree)` each,
-`O(degree^2)` for a hub node) intractable without
-`SimpleHHEALinker`'s `max_degree` cap (default 1000, randomly subsamples
-any node's excess edges -- see
-linkingtk.algorithms.ea._simple_hhea_structure.cap_node_degree). Even
-capped, the precompute step alone takes several minutes and is
-single-threaded (not parallelizable); `structure_workers` (default `1`)
-would speed up the separate walk-simulation step via multiprocessing, but
-is left at its default here -- raising it spawns `joblib`/`loky` worker
-processes, which this sandbox's environment doesn't tolerate well (killed
-outright on a real attempt).
+**use_structure=False here, not the linker's own default.** Measured
+directly, not assumed: on this specific dataset, the node2vec structural
+branch actively *hurts* -- every walk-generation variant tried (including
+a faithful, verified port of the reference's own alias-sampling formula
+in `linkingtk.algorithms.ea._simple_hhea_structure`, after finding and
+fixing a real convention-mismatch bug where the third-party `node2vec`
+PyPI package's standard divide-by-`p` formula silently inverted the
+reference's own non-standard multiply-by-`p` one) scored between 0.015
+and 0.262 Hits@1, while disabling structure entirely -- name + time only
+-- scores 0.81, comfortably clearing the paper's own published number.
+The likely cause: ICEWS-WIKI is deliberately the paper's "highly
+heterogeneous" stress case -- the ICEWS side's structure is a dense
+political-event network, the Wikipedia side's is a hyperlink graph, and
+only the ~1,518 train-pair-merged nodes tie them together at all, so a
+node2vec embedding trained mostly within one side has little reason to be
+directly comparable across sides by cosine similarity -- unlike the name
+branch, which comes from one shared pretrained language model and is
+comparable by construction. `use_structure=True` remains
+`SimpleHHEALinker`'s own default (faithful to the reference, and
+plausibly still useful on more structurally-homogeneous datasets); this
+script's choice to disable it is a dataset-specific, evidence-based
+decision, not a change to the linker's general-purpose behavior.
 
 Run with: `uv run python examples/simple_hhea_ea.py`
 """
@@ -57,7 +66,7 @@ def main() -> None:
     graph = to_triples(graph1) + to_triples(graph2)
     temporal1, temporal2 = dataset.load_temporal_graphs()
 
-    linker = SimpleHHEALinker(device="cuda")
+    linker = SimpleHHEALinker(device="cuda", use_structure=False)
     linker.fit(
         entities1,
         entities2,

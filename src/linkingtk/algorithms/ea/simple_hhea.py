@@ -77,11 +77,14 @@ class SimpleHHEALinker(BaseLinker):
             [build_structure_embeddings][linkingtk.algorithms.ea._simple_hhea_structure.build_structure_embeddings].
         max_degree: node2vec walk hyperparameter -- see
             [build_structure_embeddings][linkingtk.algorithms.ea._simple_hhea_structure.build_structure_embeddings].
-        structure_workers: Parallel workers for node2vec's walk
-            simulation (its own alias-table precompute stays serial
-            regardless -- only walk simulation parallelizes). `1`
-            (default) is safest for reproducibility/tests; a real-dataset
-            benchmark script can raise this.
+        structure_workers: Worker threads for the structural Word2Vec
+            fit -- see
+            [build_structure_embeddings][linkingtk.algorithms.ea._simple_hhea_structure.build_structure_embeddings].
+            Walk simulation itself is always single-threaded, matching
+            the reference's own default invocation.
+        structure_epochs: Word2Vec training epochs for the structural
+            skip-gram model -- see
+            [build_structure_embeddings][linkingtk.algorithms.ea._simple_hhea_structure.build_structure_embeddings].
         num_epochs: Training hyperparameter -- see
             [train][linkingtk.algorithms.ea._simple_hhea_training.train].
         learning_rate: Training hyperparameter -- see
@@ -109,6 +112,7 @@ class SimpleHHEALinker(BaseLinker):
         structure_dim: int = 64,
         max_degree: int = 1000,
         structure_workers: int = 1,
+        structure_epochs: int = 5,
         num_epochs: int = 1500,
         learning_rate: float = 0.01,
         weight_decay: float = 0.001,
@@ -126,6 +130,7 @@ class SimpleHHEALinker(BaseLinker):
         self.structure_dim = structure_dim
         self.max_degree = max_degree
         self.structure_workers = structure_workers
+        self.structure_epochs = structure_epochs
         self.num_epochs = num_epochs
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -206,6 +211,7 @@ class SimpleHHEALinker(BaseLinker):
                 num_walks=self.num_walks,
                 max_degree=self.max_degree,
                 workers=self.structure_workers,
+                epochs=self.structure_epochs,
                 random_state=random_state,
             )
             structure_emb = np.stack([structure_by_id[entity_id] for entity_id in entity_ids])
