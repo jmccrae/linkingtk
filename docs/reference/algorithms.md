@@ -14,6 +14,10 @@
 
 ::: linkingtk.algorithms.feature_classifier
 
+## LLM-based linker
+
+::: linkingtk.algorithms.llm
+
 ## Entity Alignment
 
 ::: linkingtk.algorithms.ea
