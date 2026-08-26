@@ -145,7 +145,9 @@ def build_relation_masks(
         heads_by_relation.setdefault(relation, set()).add(int(head))
         tails_by_relation.setdefault(relation, set()).add(int(tail))
 
-    def _mask(by_relation: dict[int, set[int]]) -> tuple[np.ndarray, np.ndarray]:
+    def _mask(
+        by_relation: dict[int, set[int]],
+    ) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64]]:
         rows, cols, values = [], [], []
         for relation, entities in by_relation.items():
             weight = 1.0 / len(entities)

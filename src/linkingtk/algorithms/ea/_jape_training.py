@@ -158,7 +158,8 @@ def pool_entity_attribute_vectors(
             vectors[row] = attr_embeds[indices].mean(axis=0)
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
-    return vectors / norms
+    result: npt.NDArray[np.floating[Any]] = vectors / norms
+    return result
 
 
 def reference_pools(

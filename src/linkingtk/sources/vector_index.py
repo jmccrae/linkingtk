@@ -21,7 +21,7 @@ import json
 import random
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
@@ -32,6 +32,7 @@ from linkingtk.exceptions import OptionalDependencyError
 
 if TYPE_CHECKING:
     import faiss
+    import numpy.typing as npt
 
 
 class Embedder(Protocol):
@@ -43,10 +44,10 @@ class Embedder(Protocol):
     scikit-learn's `fit_transform`/`transform` interface.
     """
 
-    def encode(self, texts: list[str], /) -> np.ndarray: ...
+    def encode(self, texts: list[str], /) -> npt.NDArray[np.floating[Any]]: ...
 
 
-def _build_or_load_offsets(path: Path) -> np.ndarray:
+def _build_or_load_offsets(path: Path) -> npt.NDArray[np.int64]:
     """Byte offset of each line in `path`, cached to `<path>.offsets.npy`.
 
     Ported from `wn-wd-entity-align`'s `faiss_lemma_query.py`: at index
@@ -125,7 +126,9 @@ def _reservoir_sample_texts(
     return reservoir
 
 
-def _project_and_normalize(vectors: np.ndarray, vh: np.ndarray | None) -> np.ndarray:
+def _project_and_normalize(
+    vectors: npt.NDArray[np.floating[Any]], vh: npt.NDArray[np.floating[Any]] | None
+) -> npt.NDArray[np.floating[Any]]:
     if vh is not None:
         vectors = vectors @ vh
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -153,7 +156,7 @@ class VectorIndexEntitySource(EntitySource):
         embedder: Embedder,
         ids_path: Path,
         entities_db_path: Path,
-        vh: np.ndarray | None,
+        vh: npt.NDArray[np.floating[Any]] | None,
     ) -> None:
         self._index = index
         self._embedder = embedder
@@ -220,7 +223,7 @@ class VectorIndexEntitySource(EntitySource):
 
         extract = resolve_field(field)
 
-        vh: np.ndarray | None = None
+        vh: npt.NDArray[np.floating[Any]] | None = None
         if reduced_dim is not None:
             if iter(entities) is entities:
                 raise TypeError(
@@ -339,7 +342,7 @@ class VectorIndexEntitySource(EntitySource):
 
         index = faiss.read_index(str(path / "index.faiss"))
         meta = json.loads((path / "meta.json").read_text())
-        vh: np.ndarray | None = None
+        vh: npt.NDArray[np.floating[Any]] | None = None
         vh_path = path / "vh.bin"
         if meta.get("reduced_dim") is not None and vh_path.exists():
             vh = np.fromfile(vh_path, dtype=np.float32).reshape(-1, meta["reduced_dim"])

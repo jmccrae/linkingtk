@@ -35,6 +35,7 @@ nav:
           - Hard-negative sampling: examples/negative_sampling.md
           - Knowledge graph embeddings: examples/kge_ea.md
           - KGE method benchmarks: examples/ea_kge_benchmarks.md
+          - Simple-HHEA on ICEWS-WIKI: examples/simple_hhea_ea.md
       - Entity Linking:
           - ReFinED-style bi-encoder benchmark: examples/el_benchmarks.md
           - EL against live Wikipedia: examples/wikipedia_el.md

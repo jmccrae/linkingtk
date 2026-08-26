@@ -21,6 +21,7 @@ from linkingtk.algorithms.ea.multike import MultiKELinker
 from linkingtk.algorithms.ea.rdgcn import RDGCNLinker
 from linkingtk.algorithms.ea.rsn4ea import RSN4EALinker
 from linkingtk.algorithms.ea.sea import SEALinker
+from linkingtk.algorithms.ea.simple_hhea import SimpleHHEALinker
 
 __all__ = [
     "AliNetLinker",
@@ -38,4 +39,5 @@ __all__ = [
     "RDGCNLinker",
     "RSN4EALinker",
     "SEALinker",
+    "SimpleHHEALinker",
 ]

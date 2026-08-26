@@ -119,6 +119,19 @@ icews_graph, wiki_graph = dataset.load_graphs()
 `icews_yago` (the other dataset from the same source) isn't implemented —
 see `IcewsWikiDataset`'s docstring for why.
 
+`load_graphs()` drops each triple's two trailing timestamp-id columns
+(matching every other `_KGZipDataset`, none of which have temporal facts
+at all). `load_temporal_graphs()` keeps them instead, resolved to real
+`"YYYY-MM"` labels via the archive's own `time_id` file, for
+[`SimpleHHEALinker`][linkingtk.algorithms.ea.simple_hhea.SimpleHHEALinker]'s
+Time2Vec branch:
+
+```python
+icews_temporal, wiki_temporal = dataset.load_temporal_graphs()
+# [(subject_id, relation_id, object_id, start_label, end_label), ...]
+# start_label/end_label are "YYYY-MM" strings, or None if unresolvable.
+```
+
 ## WordNet-Wikidata
 
 WordNet synsets aligned to Wikidata items, by topic. Fetched per-file (no

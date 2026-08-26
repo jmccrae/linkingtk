@@ -330,7 +330,8 @@ def sample_truncated_negative_triples(
 
         def draw(rows: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
             cols = rng.integers(0, candidate_width, size=len(rows))
-            return candidate_rows[inverse[rows], cols]
+            result: npt.NDArray[np.int64] = candidate_rows[inverse[rows], cols]
+            return result
     else:
 
         def draw(rows: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:

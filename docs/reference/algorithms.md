@@ -100,6 +100,18 @@
 
 ::: linkingtk.algorithms.ea._alinet_torch
 
+### Simple-HHEA
+
+::: linkingtk.algorithms.ea.simple_hhea
+
+::: linkingtk.algorithms.ea._simple_hhea_name
+
+::: linkingtk.algorithms.ea._simple_hhea_structure
+
+::: linkingtk.algorithms.ea._simple_hhea_torch
+
+::: linkingtk.algorithms.ea._simple_hhea_training
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el
