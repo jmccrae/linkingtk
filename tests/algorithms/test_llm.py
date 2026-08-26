@@ -159,6 +159,18 @@ class TestScoring:
         assert len(results) == 1
         assert results[0].target_id == "c1"
 
+    def test_candidate_id_echoed_with_id_prefix_is_recovered(self) -> None:
+        source = _entity("s1")
+        candidates = [_entity("c1")]
+        client = _FakeLlmClient({"s1": {"rankings": [{"candidate_id": "id=c1", "score": 0.7}]}})
+        linker = LlmBaseLinker(client=client)
+
+        results = linker.link([source], candidates, blocking=_AllPairs())
+
+        assert len(results) == 1
+        assert results[0].target_id == "c1"
+        assert results[0].score == 0.7
+
     def test_source_with_no_candidates_from_blocking_gets_no_result_and_no_llm_call(
         self,
     ) -> None:

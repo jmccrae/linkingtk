@@ -130,6 +130,24 @@ def _build_prompt(instruction: str, source: Entity, candidates: list[Entity]) ->
     ]
 
 
+def _resolve_candidate_id(raw_id: Any, valid_ids: set[str]) -> str | None:
+    """Recover a real candidate id from a model's possibly-mangled response.
+
+    Some models echo the prompt's own `"(id=...)"` rendering verbatim
+    instead of extracting the bare id -- observed directly against real
+    Ollama output (e.g. `"id=Atlanta_Falcons"` instead of
+    `"Atlanta_Falcons"`). Returns `None` if `raw_id` doesn't resolve to a
+    real candidate even after stripping that, meaning it's genuinely
+    hallucinated rather than just reformatted.
+    """
+    if not isinstance(raw_id, str):
+        return None
+    if raw_id in valid_ids:
+        return raw_id
+    stripped = raw_id.removeprefix("id=").strip("'\"")
+    return stripped if stripped in valid_ids else None
+
+
 class LlmBaseLinker(BaseLinker):
     """Prompts an LLM to score/rank each source entity's blocked candidates.
 
@@ -149,6 +167,15 @@ class LlmBaseLinker(BaseLinker):
         matching: Strategy used to resolve scored candidates into final
             links, same as `StringSimilarityLinker`'s `matching` argument.
         max_tokens: Forwarded to `client.complete_structured` per call.
+            Default 2048, not `complete_structured`'s own 1024 default --
+            measured directly against a real WSD benchmark
+            (`examples/llm_benchmark.py`) with wide (`top_k=50`) blocking:
+            a source entity with many real candidates can need more than
+            1024 tokens just to rank all of them, and 1024 produced
+            truncated, unparseable JSON responses for exactly those
+            higher-candidate-count entities (a systematic gap, not
+            isolated noise). Widen further if using an even larger
+            candidate width than 50.
 
     Note:
         `graph` is accepted for interface compliance but not used, same as
@@ -161,7 +188,7 @@ class LlmBaseLinker(BaseLinker):
         client: LlmClient,
         task: Task = "el",
         matching: Matcher = DEFAULT_MATCHER,
-        max_tokens: int = 1024,
+        max_tokens: int = 2048,
     ) -> None:
         self.client = client
         self.task = task
@@ -201,11 +228,12 @@ class LlmBaseLinker(BaseLinker):
             valid_ids = {candidate.id for candidate in candidates}
             scores: dict[str, float] = dict.fromkeys(valid_ids, 0.0)
             for ranking in response.get("rankings", []):
-                candidate_id, score = ranking.get("candidate_id"), ranking.get("score")
-                if candidate_id not in valid_ids:
+                raw_id, score = ranking.get("candidate_id"), ranking.get("score")
+                candidate_id = _resolve_candidate_id(raw_id, valid_ids)
+                if candidate_id is None:
                     logger.warning(
                         "LlmBaseLinker: ignoring hallucinated candidate id %r for source %r",
-                        candidate_id,
+                        raw_id,
                         source_id,
                     )
                     continue
