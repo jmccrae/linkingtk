@@ -69,6 +69,27 @@ class IcewsWikiDataset(_KGZipDataset):
             )
         return triples
 
+    def load_relation_labels(self) -> dict[str, str]:
+        """Local ``predicate_id`` -> its human-readable relation label.
+
+        Merges ``rel_ids_1``/``rel_ids_2`` -- confirmed by direct
+        inspection to be globally unique across sides (side 2 continues
+        numbering from side 1's max), so unlike ``ent_ids_N``'s per-side
+        ids, no per-side prefix is needed here. Needed for
+        [ChatEALinker][linkingtk.algorithms.ea.chatea.ChatEALinker]'s
+        prompts, which render real relation names (e.g. ``"member of"``)
+        rather than the raw numeric ids ``load_graphs``/
+        [load_temporal_graphs][linkingtk.datasets.icews.IcewsWikiDataset.load_temporal_graphs]
+        keep in each triple's relation slot.
+        """
+        with self._open_zip() as archive:
+            labels: dict[str, str] = {}
+            for side in (1, 2):
+                for line in self._member(archive, f"rel_ids_{side}").splitlines():
+                    local_id, raw = line.split("\t", 1)
+                    labels[local_id] = raw
+            return labels
+
     def load_temporal_graphs(self) -> tuple[list[TemporalTriple], list[TemporalTriple]]:
         """Like [load_graphs][linkingtk.datasets.base.GraphDatasetLoader.load_graphs],
         but keeps each triple's two timestamp columns instead of dropping them.

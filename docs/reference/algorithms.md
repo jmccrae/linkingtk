@@ -112,6 +112,16 @@
 
 ::: linkingtk.algorithms.ea._simple_hhea_training
 
+### ChatEA
+
+::: linkingtk.algorithms.ea.chatea
+
+::: linkingtk.algorithms.ea._chatea_context
+
+::: linkingtk.algorithms.ea._chatea_prompts
+
+::: linkingtk.algorithms.ea._chatea_reasoning
+
 ## Entity Linking
 
 ::: linkingtk.algorithms.el

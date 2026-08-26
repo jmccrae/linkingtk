@@ -9,6 +9,7 @@ a supporting graph is normally available. See DESIGN.md for references
 from linkingtk.algorithms.ea.alinet import AliNetLinker
 from linkingtk.algorithms.ea.attre import AttrELinker
 from linkingtk.algorithms.ea.bootea import BootEALinker
+from linkingtk.algorithms.ea.chatea import ChatEALinker
 from linkingtk.algorithms.ea.entmatcher import EntMatcherLinker
 from linkingtk.algorithms.ea.gcn_align import GCNAlignLinker
 from linkingtk.algorithms.ea.imuse import IMUSELinker
@@ -27,6 +28,7 @@ __all__ = [
     "AliNetLinker",
     "AttrELinker",
     "BootEALinker",
+    "ChatEALinker",
     "EntMatcherLinker",
     "GCNAlignLinker",
     "IMUSELinker",
