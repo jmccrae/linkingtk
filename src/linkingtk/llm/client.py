@@ -127,12 +127,13 @@ class OpenAiClient(LlmClient):
         max_tokens: int = 1024,
         temperature: float = 0.0,
     ) -> str:
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=_to_openai_messages(messages),  # type: ignore[arg-type]
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": _to_openai_messages(messages),
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        response = self._client.chat.completions.create(**kwargs)
         return response.choices[0].message.content or ""
 
     def complete_structured(
@@ -143,16 +144,17 @@ class OpenAiClient(LlmClient):
         max_tokens: int = 1024,
         temperature: float = 0.0,
     ) -> dict[str, Any]:
-        response = self._client.chat.completions.create(  # type: ignore[call-overload]
-            model=self.model,
-            messages=_to_openai_messages(messages),
-            max_tokens=max_tokens,
-            temperature=temperature,
-            response_format={
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": _to_openai_messages(messages),
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "response_format": {
                 "type": "json_schema",
                 "json_schema": {"name": "response", "schema": schema, "strict": True},
             },
-        )
+        }
+        response = self._client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content or "{}"
         result = json.loads(content)
         if not isinstance(result, dict):
