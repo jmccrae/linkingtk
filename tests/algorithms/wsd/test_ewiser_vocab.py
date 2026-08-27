@@ -90,6 +90,16 @@ class TestFromOffsetsFile:
 
         assert vocabulary.synset_id_for(0) is None
 
+    def test_records_the_lexicon_it_was_built_from(
+        self, fake_wn: types.ModuleType, tmp_path: Path
+    ) -> None:
+        offsets_file = tmp_path / "offsets.txt"
+        offsets_file.write_text("wn:02084071n 10742\n")
+
+        vocabulary = SenseVocabulary.from_offsets_file(offsets_file, lexicon="omw-en:1.4")
+
+        assert vocabulary.lexicon == "omw-en:1.4"
+
 
 class TestFromWn:
     def test_deduplicates_and_sorts(self) -> None:
@@ -105,6 +115,11 @@ class TestFromWn:
         vocabulary = SenseVocabulary.from_wn(["omw-en-02084071-n"], nspecial=2)
 
         assert vocabulary.index_for("omw-en-02084071-n") == 2
+
+    def test_has_no_lexicon(self) -> None:
+        vocabulary = SenseVocabulary.from_wn(["omw-en-02084071-n"])
+
+        assert vocabulary.lexicon is None
 
 
 class TestIndexForSynsetIdFor:

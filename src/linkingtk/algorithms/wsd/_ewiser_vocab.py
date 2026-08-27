@@ -38,10 +38,21 @@ class SenseVocabulary:
             ``<s>``/``<pad>``/``</s>``/``<unk>``, or an offset that didn't
             resolve in the target lexicon) that never matches a real
             candidate sense.
+        lexicon: The `wn` lexicon specifier `index_to_synset_id`'s entries
+            are ids in (e.g. ``"omw-en:1.4"``), or ``None`` if they aren't
+            `wn` ids at all (e.g. `from_wn`'s from-scratch training path).
+            Used only for
+            [EwiserLinker][linkingtk.algorithms.wsd.ewiser.EwiserLinker]'s
+            own mismatched-lexicon check against a `WnEntitySource`
+            `dataset2` -- see `index_for`'s docstring for why that check
+            exists.
     """
 
-    def __init__(self, index_to_synset_id: list[str | None]) -> None:
+    def __init__(
+        self, index_to_synset_id: list[str | None], lexicon: str | None = None
+    ) -> None:
         self._index_to_synset_id = index_to_synset_id
+        self.lexicon = lexicon
         self._synset_id_to_index = {
             synset_id: index
             for index, synset_id in enumerate(index_to_synset_id)
@@ -84,7 +95,7 @@ class SenseVocabulary:
                 index_to_synset_id.append(wn30_offset_to_synset_id(token, lexicon=lexicon))
             else:
                 index_to_synset_id.append(None)
-        return cls(index_to_synset_id)
+        return cls(index_to_synset_id, lexicon=lexicon)
 
     @classmethod
     def from_wn(cls, synset_ids: list[str], nspecial: int = 4) -> SenseVocabulary:
@@ -105,7 +116,25 @@ class SenseVocabulary:
         return cls(index_to_synset_id)
 
     def index_for(self, synset_id: str) -> int | None:
-        """The output-layer index for `synset_id`, or ``None`` if it's not in this vocabulary."""
+        """The output-layer index for `synset_id`, or ``None`` if it's not in this vocabulary.
+
+        A `synset_id` from the *wrong* lexicon silently returns ``None``
+        just like a genuinely absent one -- there's no way to tell "not in
+        this WordNet's sense inventory" apart from "belongs to a
+        different, non-overlapping id space" from a string lookup alone
+        (confirmed real: `from_offsets_file`'s default ``lexicon`` is
+        ``"omw-en:1.4"``, whose ids look like ``"omw-en-00319912-v"``, but
+        `WnEntitySource`'s own default is ``"oewn:2021"``, whose ids look
+        like ``"oewn-00319912-v"`` -- and per
+        [synset_id_to_wn30_offset][linkingtk.sources.wn.synset_id_to_wn30_offset]'s
+        own docstring, `oewn:*`'s offsets have diverged from PWN 3.0, so
+        even the numeric part rarely matches). Every candidate from a
+        mismatched `WnEntitySource` therefore fails this lookup, and
+        `EwiserEncoder.score` scores every one of them ``-inf`` -- silently,
+        with no exception (see #67). `EwiserLinker` checks for exactly
+        this `WnEntitySource`-lexicon mismatch up front and raises instead
+        of letting it happen silently.
+        """
         return self._synset_id_to_index.get(synset_id)
 
     def synset_id_for(self, index: int) -> str | None:

@@ -431,7 +431,16 @@ class EwiserLinker(BaseLinker):
         -- what `link()` itself builds internally, exposed so
         [LlmRerankerLinker][linkingtk.algorithms.llm_reranker.LlmRerankerLinker]
         (#23) can re-rank a narrowed top-k instead of every blocked pair.
+
+        Raises:
+            LinkingTKError: If `dataset2` is a `WnEntitySource` whose
+                `lexicon` doesn't match `model.vocabulary`'s own -- every
+                candidate would otherwise fail
+                [SenseVocabulary.index_for][linkingtk.algorithms.wsd._ewiser_vocab.SenseVocabulary.index_for]
+                and silently score ``-inf`` (see that method's docstring,
+                and #67).
         """
+        self._check_lexicon(dataset2)
         pairs = list(blocking.candidate_pairs(dataset1, dataset2))
         if not pairs:
             return {}
@@ -446,6 +455,23 @@ class EwiserLinker(BaseLinker):
             candidates_by_source[entity1.id].append((entity2.id, score))
 
         return candidates_by_source
+
+    def _check_lexicon(self, dataset2: list[Entity] | EntitySource) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        vocabulary_lexicon = self.model.vocabulary.lexicon
+        if (
+            vocabulary_lexicon is not None
+            and isinstance(dataset2, WnEntitySource)
+            and dataset2.lexicon != vocabulary_lexicon
+        ):
+            raise LinkingTKError(
+                f"model.vocabulary was built from lexicon {vocabulary_lexicon!r}, but dataset2 "
+                f"is a WnEntitySource(lexicon={dataset2.lexicon!r}) -- every candidate sense id "
+                "would fail to resolve against the vocabulary and silently score -inf (see "
+                "SenseVocabulary.index_for's docstring). Construct "
+                f"WnEntitySource(lexicon={vocabulary_lexicon!r}) instead."
+            )
 
     def link(
         self,

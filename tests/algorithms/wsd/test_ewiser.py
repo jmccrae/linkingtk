@@ -168,6 +168,54 @@ class TestLink:
         assert results == []
 
 
+class TestLexiconMismatchCheck:
+    """A `WnEntitySource` built with a different lexicon than the vocabulary's own
+    produces ids that never resolve via `SenseVocabulary.index_for` -- every candidate
+    would otherwise silently score `-inf` with no error at all (#67)."""
+
+    def test_mismatched_wn_entity_source_lexicon_raises(
+        self, fake_wn: types.ModuleType
+    ) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        vocabulary = SenseVocabulary(["s-bank-1"], lexicon="omw-en:1.4")
+        encoder = EwiserEncoder(
+            model_name_or_path=_TINY_MODEL, vocabulary=vocabulary, decoder_hidden_dim=8
+        )
+        linker = EwiserLinker(encoder)
+        mention, _sense1, _sense2 = _mention_and_senses()
+
+        with pytest.raises(LinkingTKError, match="omw-en:1.4"):
+            linker.score_candidates([mention], WnEntitySource(lexicon="oewn:2021"))
+
+    def test_matching_wn_entity_source_lexicon_does_not_raise(
+        self, fake_wn: types.ModuleType
+    ) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        vocabulary = SenseVocabulary(["s-bank-1"], lexicon="omw-en:1.4")
+        encoder = EwiserEncoder(
+            model_name_or_path=_TINY_MODEL, vocabulary=vocabulary, decoder_hidden_dim=8
+        )
+        linker = EwiserLinker(encoder)
+        mention, _sense1, _sense2 = _mention_and_senses()
+
+        linker.score_candidates([mention], WnEntitySource(lexicon="omw-en:1.4"))
+
+    def test_vocabulary_without_a_lexicon_skips_the_check(
+        self, fake_wn: types.ModuleType
+    ) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        encoder = EwiserEncoder(
+            model_name_or_path=_TINY_MODEL, vocabulary=_vocab(), decoder_hidden_dim=8
+        )
+        linker = EwiserLinker(encoder)
+        mention, _sense1, _sense2 = _mention_and_senses()
+
+        linker.score_candidates([mention], WnEntitySource(lexicon="oewn:2021"))
+
+
 class _FakeWnError(Exception):
     pass
 
@@ -180,13 +228,19 @@ class _FakeSynset:
 def _fake_wn_module(synsets_by_id: dict[str, _FakeSynset]) -> types.ModuleType:
     module = types.ModuleType("wn")
 
-    def synset(id: str, *, lexicon: str | None = None) -> _FakeSynset:
+    def synset(id: str, *, lexicon: str | None = None, lang: str | None = None) -> _FakeSynset:
         found = synsets_by_id.get(id)
         if found is None:
             raise module.Error(f"no such synset: {id}")  # type: ignore[attr-defined]
         return found
 
+    def synsets(
+        query: str, *, lexicon: str | None = None, lang: str | None = None
+    ) -> list[_FakeSynset]:
+        return []  # no candidates -- the lexicon-mismatch tests only care about the check itself
+
     module.synset = synset  # type: ignore[attr-defined]
+    module.synsets = synsets  # type: ignore[attr-defined]
     module.Error = _FakeWnError  # type: ignore[attr-defined]
     return module
 
