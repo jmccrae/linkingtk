@@ -1,60 +1,38 @@
 # Comparative benchmark harness (all tiers)
 
-One linker per complexity tier -- MVP, Classical ML, KGE (EA only), Deep
-Learning and LLM-Oriented -- run on the same real dataset per task (EA/EL/
-WSD) and printed as a single side-by-side table, so cost (wall-clock time,
-LLM-call count) and accuracy can be compared across milestones directly.
-Filed as [#24](https://github.com/jmccrae/linkingtk/issues/24).
+Runs one linker per complexity tier -- MVP, Classical ML, KGE (Entity
+Alignment only), Deep Learning and LLM-Oriented -- on the same real
+dataset for each task (EA, EL, WSD) and prints a single table with both
+accuracy and cost (wall-clock time, LLM-call count) side by side, so you
+can see the tradeoff directly instead of comparing numbers across
+separate pages.
 
-The comparison harness itself
-([`BenchmarkRun`][linkingtk.eval.harness.BenchmarkRun]/
-[`run_benchmarks`][linkingtk.eval.harness.run_benchmarks]/
-[`format_table`][linkingtk.eval.harness.format_table] in
-[`linkingtk.eval.harness`](../reference/eval.md)) is generic -- it only
-times a caller-supplied fit/link/evaluate callable and tabulates the
-result, rather than trying to guess how to wire up an arbitrary linker
-against an arbitrary dataset (ranked vs. unranked evaluation, exhaustive
-vs. blocking-restricted ranking, and needing `.fit()` or not all differ
-too much across tasks and tiers for that). Every run in this example reuses
-exactly the fit/link/evaluate logic another `examples/*_benchmark.py`
-script already established, not reinvented:
+The underlying harness
+([`BenchmarkRun`][linkingtk.eval.harness.BenchmarkRun],
+[`run_benchmarks`][linkingtk.eval.harness.run_benchmarks],
+[`format_table`][linkingtk.eval.harness.format_table]) is reusable for
+your own comparisons: build a list of `BenchmarkRun`s, each wrapping a
+zero-argument callable that fits/links/evaluates a linker and returns an
+[`EvaluationReport`][linkingtk.eval.report.EvaluationReport], and pass it
+to `run_benchmarks` -- it times each run and `format_table` renders the
+results grouped by task.
 
-- **EA** uses [`IcewsWikiDataset`](../datasets/real_world_ea.md#icews)
-  (real train/test split + graph, per
-  [Simple-HHEA](simple_hhea_ea.md)/[ChatEA](chatea_ea.md)) -- the only real
-  EA dataset in this repo that both the KGE and Deep Learning tiers can run
-  against. The Deep Learning and LLM-Oriented rows use those two scripts'
-  exact hyperparameters.
-- **EL** uses [`AidaConllDataset`](../datasets/index.md) (real native
-  split, per the [ReFinED benchmark](el_benchmarks.md)). No KGE row --
-  that tier is EA-only, relation-triple knowledge graph embeddings have no
-  EL analogue in this repo.
-- **WSD** uses UFSAC's SemEval-2007 split (per
-  [GlossBERT reproduction](glossbert_reproduction.md)/
-  [the LLM benchmark](llm_benchmark.md)). No KGE row either. The Deep
-  Learning row loads the existing full-SemCor-trained checkpoint
-  (`models/glossbert_semcor_full/model.pt`, see
-  [the full-corpus training example](glossbert_full_training.md)) rather
-  than retraining -- a zero-training-cost, inference-only row, deliberately
-  not the tiny from-scratch training slice
-  [the GlossBERT training-verification example](glossbert_benchmark.md)
-  demonstrates.
+Datasets used in this example:
 
-Each task's LLM-Oriented row layers an LLM on top of that task's own
-already-benchmarked Deep Learning linker
-([`ChatEALinker`](../reference/algorithms.md) on `SimpleHHEALinker`,
-[`LlmRerankerLinker`](../reference/algorithms.md) on
-`ReFinEDLinker`/`GlossBertLinker`) rather than a bare `LlmBaseLinker` --
-matching [ChatEA](chatea_ea.md)/[the LLM-reranking examples](blink_llm_reranker_benchmark.md)'s
-own "cheap retrieval, LLM reranks only the top-k, only on a random sample
-of improvable sources" pattern to keep real LLM-call cost bounded
-(`--sample`, default 30).
+- **EA**: [ICEWS-WIKI](../datasets/real_world_ea.md#icews)
+- **EL**: [AIDA-CoNLL](../datasets/index.md)
+- **WSD**: UFSAC's SemEval-2007 split
 
-Requires: the `kge` optional dependency group (EA); a local AIDA-CoNLL
-checkout, fetched automatically (EL); a local UFSAC 2.1 checkout at
-`~/data/ufsac-public-2.1/` and the full-SemCor GlossBERT checkpoint at
-`./models/glossbert_semcor_full/model.pt` (WSD); a local Ollama server
-with `ollama pull llama2:13b` (or pass `--model`).
+Each task's LLM-Oriented row re-ranks that task's Deep Learning linker's
+own top candidates with a local LLM rather than asking the LLM to decide
+from scratch, keeping the number of real LLM calls small (`--sample`,
+default 30).
+
+Requires: the `kge` optional dependency group; a local UFSAC 2.1 checkout
+at `~/data/ufsac-public-2.1/` and the checkpoint produced by
+[the full-corpus training example](glossbert_full_training.md); a local
+Ollama server with `ollama pull llama2:13b` (or pass `--model` for a
+different model). AIDA-CoNLL and ICEWS-WIKI are fetched automatically.
 
 ```python
 --8<-- "examples/comparative_benchmark.py"
@@ -66,15 +44,14 @@ Run with:
 uv run python examples/comparative_benchmark.py
 ```
 
-Or a single, fast task (useful for a quick smoke test):
+Or a single, fast task:
 
 ```bash
 uv run python examples/comparative_benchmark.py --tasks el --sample 3
 ```
 
-Real output from each task (run separately at a reduced `--sample` for
-speed -- a full `--tasks ea,el,wsd --sample 30` run takes considerably
-longer, dominated by KGE training and real LLM calls):
+Example output (one task at a time, at a reduced `--sample` for speed --
+a full run across all three tasks takes considerably longer):
 
 ```text
 === EA ===
@@ -100,31 +77,13 @@ Deep Learning  GlossBertLinker          SemEval-2007  0.679        0.679   0.679
 LLM-Oriented   LlmRerankerLinker        SemEval-2007  0.677        0.677   0.677  989.3    10
 ```
 
-A few real observations from these numbers, not just the table itself:
-
-- **The generic `KGELinker` (plain TransE, 20 epochs) is a striking
-  cautionary data point, not a bug**: near-zero Hits@1 on ICEWS-WIKI's ~3.5M
-  event triples, and the single most expensive row in the whole EA table
-  (~21 minutes, more than the Deep Learning and LLM-Oriented rows
-  combined). This matches this repo's own earlier finding (issue #14) that
-  a from-scratch KGE baseline needs EA-specific tricks (seed-alignment
-  losses, bootstrapping -- the milestone-3 methods in `algorithms/ea/`) to
-  be competitive; plugged in naively, it's both slow *and* inaccurate here.
-  Plain string similarity, by contrast, scores 0.935 precision@1 in
-  0.4 seconds on this same dataset -- ICEWS-WIKI's real-world entity names
-  are close to identical across the ICEWS and Wikipedia sides, so the
-  "cheapest" tier wins outright on both axes for this particular dataset.
-- **`ChatEALinker`'s 273 LLM calls for 10 sampled EA source entities**
-  (vs. `LlmRerankerLinker`'s 3-10 calls for a similar EA/EL/WSD sample
-  size) is the LLM-call column doing its job: ChatEA's own methodology
-  generates a natural-language description via a separate LLM call for
-  each candidate entity's neighborhood, not just one classification call
-  per source -- a real, measured cost difference between "LLM re-ranks a
-  precomputed score" and "LLM reasons over generated context," not visible
-  from accuracy numbers alone.
-- A couple of sampled LLM calls timed out or returned malformed JSON during
-  these runs (against local `llama2:13b` via Ollama) -- handled by the
-  existing defensive fallback paths in `LlmRerankerLinker`/`ChatEALinker`
-  (falls back to the base ranking / an empty description), not a crash.
-  Real infrastructure has real failure modes; this harness doesn't paper
-  over them.
+Two things worth noticing in these numbers: on ICEWS-WIKI, a generic
+knowledge-graph-embedding linker (plain TransE) is both the slowest row
+(~21 minutes) and the least accurate (near-zero Hits@1) -- plain string
+similarity gets 93.5% precision@1 in under a second on the same data, a
+reminder that a cheaper tier can win outright rather than trading accuracy
+for speed. And the LLM-call counts vary a lot by method even at the same
+sample size: `ChatEALinker` makes far more calls per sampled entity than
+`LlmRerankerLinker` does, because it generates a natural-language
+description for each candidate rather than re-ranking a precomputed score
+-- a cost difference the accuracy numbers alone wouldn't show.
