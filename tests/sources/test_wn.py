@@ -11,6 +11,7 @@ from linkingtk.sources.wn import (
     sensekey_to_synset_id,
     synset_id_to_sensekey,
     synset_id_to_wn30_offset,
+    synset_id_via_ili,
     wn30_offset_to_synset_id,
 )
 
@@ -37,10 +38,17 @@ class _FakeWord:
 
 
 class _FakeSynset:
-    def __init__(self, id: str, words: list[_FakeWord], definition: str | None) -> None:
+    def __init__(
+        self,
+        id: str,
+        words: list[_FakeWord],
+        definition: str | None,
+        ili: str | None = None,
+    ) -> None:
         self.id = id
         self._words = words
         self._definition = definition
+        self.ili = ili
 
     def words(self) -> list[_FakeWord]:
         return self._words
@@ -68,6 +76,8 @@ def _fake_wn_module(
     synsets_by_query: dict[str, list[_FakeSynset]],
     synsets_by_id: dict[str, _FakeSynset],
     senses_by_lemma: dict[str, list[_FakeSense]] | None = None,
+    synsets_by_lexicon_and_id: dict[tuple[str | None, str], _FakeSynset] | None = None,
+    synsets_by_ili_and_lexicon: dict[tuple[str, str | None], list[_FakeSynset]] | None = None,
 ) -> types.ModuleType:
     module = types.ModuleType("wn")
 
@@ -79,10 +89,15 @@ def _fake_wn_module(
         lexicon: str | None = None,
         lang: str | None = None,
     ) -> list[_FakeSynset]:
+        if ili is not None:
+            return (synsets_by_ili_and_lexicon or {}).get((ili, lexicon), [])
         return synsets_by_query.get(form or "", [])
 
     def synset(id: str, *, lexicon: str | None = None, lang: str | None = None) -> _FakeSynset:
-        found = synsets_by_id.get(id)
+        if synsets_by_lexicon_and_id is not None:
+            found = synsets_by_lexicon_and_id.get((lexicon, id))
+        else:
+            found = synsets_by_id.get(id)
         if found is None:
             raise module.Error(f"no such synset: {id}")  # type: ignore[attr-defined]
         return found
@@ -376,3 +391,87 @@ class TestWn30OffsetToSynsetId:
 
         offset = synset_id_to_wn30_offset("omw-en-02084071-n")
         assert wn30_offset_to_synset_id(offset) == "omw-en-02084071-n"
+
+
+class TestSynsetIdViaIli:
+    def test_resolves_via_shared_ili(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        source = _FakeSynset(id="oewn-00319912-v", words=[], definition=None, ili="i23324")
+        target = _FakeSynset(id="omw-en-00319111-v", words=[], definition=None, ili="i23324")
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            synsets_by_lexicon_and_id={("oewn:2021", "oewn-00319912-v"): source},
+            synsets_by_ili_and_lexicon={("i23324", "omw-en:1.4"): [target]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        result = synset_id_via_ili(
+            "oewn-00319912-v", lexicon="oewn:2021", target_lexicon="omw-en:1.4"
+        )
+
+        assert result == "omw-en-00319111-v"
+
+    def test_unresolvable_source_id_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _fake_wn_module(
+            synsets_by_query={}, synsets_by_id={}, synsets_by_lexicon_and_id={}
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        result = synset_id_via_ili(
+            "oewn-nonexistent-v", lexicon="oewn:2021", target_lexicon="omw-en:1.4"
+        )
+
+        assert result is None
+
+    def test_source_synset_with_no_ili_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        source = _FakeSynset(id="oewn-no-ili-v", words=[], definition=None, ili=None)
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            synsets_by_lexicon_and_id={("oewn:2021", "oewn-no-ili-v"): source},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        result = synset_id_via_ili(
+            "oewn-no-ili-v", lexicon="oewn:2021", target_lexicon="omw-en:1.4"
+        )
+
+        assert result is None
+
+    def test_no_target_synset_shares_the_ili_returns_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source = _FakeSynset(id="oewn-00319912-v", words=[], definition=None, ili="i23324")
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            synsets_by_lexicon_and_id={("oewn:2021", "oewn-00319912-v"): source},
+            synsets_by_ili_and_lexicon={},  # no omw-en:1.4 synset carries "i23324"
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        result = synset_id_via_ili(
+            "oewn-00319912-v", lexicon="oewn:2021", target_lexicon="omw-en:1.4"
+        )
+
+        assert result is None
+
+    def test_multiple_target_matches_returns_the_first(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source = _FakeSynset(id="oewn-00319912-v", words=[], definition=None, ili="i23324")
+        first = _FakeSynset(id="omw-en-00319111-v", words=[], definition=None, ili="i23324")
+        second = _FakeSynset(id="omw-en-99999999-v", words=[], definition=None, ili="i23324")
+        module = _fake_wn_module(
+            synsets_by_query={},
+            synsets_by_id={},
+            synsets_by_lexicon_and_id={("oewn:2021", "oewn-00319912-v"): source},
+            synsets_by_ili_and_lexicon={("i23324", "omw-en:1.4"): [first, second]},
+        )
+        monkeypatch.setitem(sys.modules, "wn", module)
+
+        result = synset_id_via_ili(
+            "oewn-00319912-v", lexicon="oewn:2021", target_lexicon="omw-en:1.4"
+        )
+
+        assert result == "omw-en-00319111-v"

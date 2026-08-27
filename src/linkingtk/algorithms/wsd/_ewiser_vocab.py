@@ -128,12 +128,15 @@ class SenseVocabulary:
         like ``"oewn-00319912-v"`` -- and per
         [synset_id_to_wn30_offset][linkingtk.sources.wn.synset_id_to_wn30_offset]'s
         own docstring, `oewn:*`'s offsets have diverged from PWN 3.0, so
-        even the numeric part rarely matches). Every candidate from a
-        mismatched `WnEntitySource` therefore fails this lookup, and
-        `EwiserEncoder.score` scores every one of them ``-inf`` -- silently,
-        with no exception (see #67). `EwiserLinker` checks for exactly
-        this `WnEntitySource`-lexicon mismatch up front and raises instead
-        of letting it happen silently.
+        even the numeric part rarely matches). Left to itself, every
+        candidate from a mismatched `WnEntitySource` would fail this
+        lookup, and `EwiserEncoder.score` would score every one of them
+        ``-inf`` -- silently, with no exception (see #67). `EwiserLinker`
+        avoids this by translating a `WnEntitySource` candidate's id into
+        `self.lexicon`'s id space via
+        [synset_id_via_ili][linkingtk.sources.wn.synset_id_via_ili] before
+        it ever reaches this method, whenever the two lexicons differ --
+        see `EwiserLinker.score_candidates`'s own docstring.
         """
         return self._synset_id_to_index.get(synset_id)
 

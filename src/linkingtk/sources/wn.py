@@ -305,3 +305,54 @@ def wn30_offset_to_synset_id(offset: str, lexicon: str = "omw-en:1.4") -> str | 
     except wn.Error:
         return None
     return synset_id
+
+
+def synset_id_via_ili(synset_id: str, lexicon: str, target_lexicon: str) -> str | None:
+    """Map `synset_id` (a synset id in `lexicon`) to its counterpart in
+    `target_lexicon`, via their shared Interlingual Index (ILI) entry.
+
+    Unlike [wn30_offset_to_synset_id][linkingtk.sources.wn.wn30_offset_to_synset_id],
+    this works across *any* two lexicons with ILI links, not just ones that
+    happen to share `omw-en:1.4`'s byte-offset-embedding id convention --
+    in particular it's what lets
+    [EwiserLinker][linkingtk.algorithms.wsd.ewiser.EwiserLinker] resolve
+    candidates from a `WnEntitySource` lexicon that differs from the one a
+    checkpoint's `SenseVocabulary` was built from (e.g. `oewn:2025+`
+    candidates against an `omw-en:1.4` vocabulary): confirmed directly that
+    `oewn:2025+`'s ``"oewn-00319912-v"`` and `omw-en:1.4`'s
+    ``"omw-en-00319111-v"`` are the *same* synset (different byte offsets
+    -- `oewn`'s have diverged from PWN 3.0, see
+    `synset_id_to_wn30_offset`'s own docstring -- but the same ILI entry,
+    ``"i23324"``), so a plain id-string comparison would never find this
+    match, while this does (see #67).
+
+    Args:
+        synset_id: A synset id in `lexicon`, e.g. ``"oewn-00319912-v"``.
+        lexicon: The `wn` lexicon `synset_id` belongs to.
+        target_lexicon: The `wn` lexicon to resolve the matching synset in.
+
+    Returns:
+        The matching synset id in `target_lexicon`, or ``None`` if
+        `synset_id` doesn't resolve in `lexicon`, has no ILI entry, or
+        `target_lexicon` has no synset attached to that same ILI entry
+        (any of which are real, unremarkable outcomes -- not every synset
+        is cross-lexicon-linked). The first match is returned if more than
+        one synset in `target_lexicon` shares the ILI entry.
+
+    Raises:
+        OptionalDependencyError: If `wn` isn't installed.
+    """
+    try:
+        import wn
+    except ImportError as exc:
+        raise OptionalDependencyError("synset_id_via_ili", "wn") from exc
+
+    try:
+        synset = wn.synset(synset_id, lexicon=lexicon)
+    except wn.Error:
+        return None
+    ili = synset.ili
+    if ili is None:
+        return None
+    matches = wn.synsets(ili=ili, lexicon=target_lexicon)
+    return matches[0].id if matches else None

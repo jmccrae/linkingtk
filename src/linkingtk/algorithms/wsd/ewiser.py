@@ -74,6 +74,7 @@ See [EwiserEncoder][linkingtk.algorithms.wsd.ewiser.EwiserEncoder] and
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 import torch
@@ -432,22 +433,26 @@ class EwiserLinker(BaseLinker):
         [LlmRerankerLinker][linkingtk.algorithms.llm_reranker.LlmRerankerLinker]
         (#23) can re-rank a narrowed top-k instead of every blocked pair.
 
-        Raises:
-            LinkingTKError: If `dataset2` is a `WnEntitySource` whose
-                `lexicon` doesn't match `model.vocabulary`'s own -- every
-                candidate would otherwise fail
-                [SenseVocabulary.index_for][linkingtk.algorithms.wsd._ewiser_vocab.SenseVocabulary.index_for]
-                and silently score ``-inf`` (see that method's docstring,
-                and #67).
+        If `dataset2` is a `WnEntitySource` whose `lexicon` differs from
+        `model.vocabulary`'s own, candidate ids are translated into the
+        vocabulary's lexicon via
+        [synset_id_via_ili][linkingtk.sources.wn.synset_id_via_ili] before
+        scoring (see `_translate_for_scoring`'s own docstring) -- without
+        this, every candidate would fail
+        [SenseVocabulary.index_for][linkingtk.algorithms.wsd._ewiser_vocab.SenseVocabulary.index_for]
+        and silently score ``-inf`` (#67). Candidate ids in the returned
+        dict are still `dataset2`'s own (untranslated) ids -- the
+        translation is scoring-only, invisible to the caller.
         """
-        self._check_lexicon(dataset2)
         pairs = list(blocking.candidate_pairs(dataset1, dataset2))
         if not pairs:
             return {}
 
+        scoring_pairs = self._translate_for_scoring(pairs, dataset2)
+
         with torch.no_grad():
             self.model.eval()
-            scores = self.model.score(pairs)
+            scores = self.model.score(scoring_pairs)
             self.model.train()
 
         candidates_by_source: dict[str, list[tuple[str, float]]] = defaultdict(list)
@@ -456,22 +461,45 @@ class EwiserLinker(BaseLinker):
 
         return candidates_by_source
 
-    def _check_lexicon(self, dataset2: list[Entity] | EntitySource) -> None:
-        from linkingtk.sources.wn import WnEntitySource
+    def _translate_for_scoring(
+        self, pairs: list[tuple[Entity, Entity]], dataset2: list[Entity] | EntitySource
+    ) -> list[tuple[Entity, Entity]]:
+        """Replace each candidate's id with its `model.vocabulary`-lexicon counterpart,
+        resolved via ILI, when `dataset2` is a `WnEntitySource` in a
+        different lexicon than the vocabulary was built from -- a no-op
+        (returns `pairs` unchanged) otherwise, including whenever
+        `model.vocabulary.lexicon` is ``None`` (a `from_wn`-built
+        vocabulary, not tied to any real `wn` lexicon at all).
+
+        A candidate id that doesn't resolve via ILI (no ILI entry on
+        either side, or no synset sharing it in the vocabulary's lexicon)
+        is passed through untranslated, exactly like today -- `score()`'s
+        own ``-inf`` fallback still applies, correctly, since that
+        candidate genuinely isn't resolvable against this vocabulary.
+        """
+        from linkingtk.sources.wn import WnEntitySource, synset_id_via_ili
 
         vocabulary_lexicon = self.model.vocabulary.lexicon
         if (
-            vocabulary_lexicon is not None
-            and isinstance(dataset2, WnEntitySource)
-            and dataset2.lexicon != vocabulary_lexicon
+            vocabulary_lexicon is None
+            or not isinstance(dataset2, WnEntitySource)
+            or dataset2.lexicon == vocabulary_lexicon
         ):
-            raise LinkingTKError(
-                f"model.vocabulary was built from lexicon {vocabulary_lexicon!r}, but dataset2 "
-                f"is a WnEntitySource(lexicon={dataset2.lexicon!r}) -- every candidate sense id "
-                "would fail to resolve against the vocabulary and silently score -inf (see "
-                "SenseVocabulary.index_for's docstring). Construct "
-                f"WnEntitySource(lexicon={vocabulary_lexicon!r}) instead."
-            )
+            return pairs
+
+        translated_id_cache: dict[str, str | None] = {}
+        translated_pairs = []
+        for mention, sense in pairs:
+            if sense.id not in translated_id_cache:
+                translated_id_cache[sense.id] = synset_id_via_ili(
+                    sense.id, lexicon=dataset2.lexicon, target_lexicon=vocabulary_lexicon
+                )
+            mapped_id = translated_id_cache[sense.id]
+            if mapped_id is None:
+                translated_pairs.append((mention, sense))
+            else:
+                translated_pairs.append((mention, replace(sense, id=mapped_id)))
+        return translated_pairs
 
     def link(
         self,

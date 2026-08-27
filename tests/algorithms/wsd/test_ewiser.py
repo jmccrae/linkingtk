@@ -168,52 +168,173 @@ class TestLink:
         assert results == []
 
 
-class TestLexiconMismatchCheck:
+class _FakeSynsetWithIli:
+    def __init__(self, id: str, ili: str | None, lemmas: list[str] | None = None) -> None:
+        self.id = id
+        self.ili = ili
+        self._lemmas = lemmas or []
+
+    def definition(self) -> str:
+        return ""
+
+    def lemmas(self) -> list[str]:
+        return self._lemmas
+
+
+def _fake_wn_module_with_ili(
+    synsets_by_lexicon_and_id: dict[tuple[str, str], _FakeSynsetWithIli],
+) -> types.ModuleType:
+    module = types.ModuleType("wn")
+
+    def synset(
+        id: str, *, lexicon: str | None = None, lang: str | None = None
+    ) -> _FakeSynsetWithIli:
+        found = synsets_by_lexicon_and_id.get((lexicon, id))
+        if found is None:
+            raise module.Error(f"no such synset: {id}")  # type: ignore[attr-defined]
+        return found
+
+    def synsets(
+        form: str | None = None,
+        pos: str | None = None,
+        ili: str | None = None,
+        *,
+        lexicon: str | None = None,
+        lang: str | None = None,
+    ) -> list[_FakeSynsetWithIli]:
+        return [
+            syn
+            for (syn_lexicon, _syn_id), syn in synsets_by_lexicon_and_id.items()
+            if syn_lexicon == lexicon
+            and (ili is None or syn.ili == ili)
+            and (form is None or form in syn._lemmas)
+        ]
+
+    module.synset = synset  # type: ignore[attr-defined]
+    module.synsets = synsets  # type: ignore[attr-defined]
+    module.Error = _FakeWnError  # type: ignore[attr-defined]
+    return module
+
+
+@pytest.fixture
+def fake_wn_with_ili(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    # "oewn-00319912-v" and "omw-en-00319111-v" are the real, confirmed
+    # cross-lexicon pair from #67's own diagnosis (different byte offsets,
+    # same ILI entry "i23324").
+    module = _fake_wn_module_with_ili(
+        {
+            ("oewn:2021", "oewn-00319912-v"): _FakeSynsetWithIli(
+                "oewn-00319912-v", ili="i23324", lemmas=["stretch"]
+            ),
+            ("omw-en:1.4", "omw-en-00319111-v"): _FakeSynsetWithIli(
+                "omw-en-00319111-v", ili="i23324"
+            ),
+            ("oewn:2021", "oewn-no-ili-v"): _FakeSynsetWithIli("oewn-no-ili-v", ili=None),
+        }
+    )
+    monkeypatch.setitem(sys.modules, "wn", module)
+    return module
+
+
+class TestLexiconTranslationForScoring:
     """A `WnEntitySource` built with a different lexicon than the vocabulary's own
-    produces ids that never resolve via `SenseVocabulary.index_for` -- every candidate
-    would otherwise silently score `-inf` with no error at all (#67)."""
+    produces ids that never resolve via plain `SenseVocabulary.index_for` --
+    `EwiserLinker` translates them via ILI before scoring instead of letting
+    every candidate silently score `-inf` (#67)."""
 
-    def test_mismatched_wn_entity_source_lexicon_raises(
-        self, fake_wn: types.ModuleType
-    ) -> None:
-        from linkingtk.sources.wn import WnEntitySource
-
-        vocabulary = SenseVocabulary(["s-bank-1"], lexicon="omw-en:1.4")
+    def _linker(self, vocabulary: SenseVocabulary) -> EwiserLinker:
         encoder = EwiserEncoder(
             model_name_or_path=_TINY_MODEL, vocabulary=vocabulary, decoder_hidden_dim=8
         )
-        linker = EwiserLinker(encoder)
-        mention, _sense1, _sense2 = _mention_and_senses()
+        return EwiserLinker(encoder)
 
-        with pytest.raises(LinkingTKError, match="omw-en:1.4"):
-            linker.score_candidates([mention], WnEntitySource(lexicon="oewn:2021"))
-
-    def test_matching_wn_entity_source_lexicon_does_not_raise(
-        self, fake_wn: types.ModuleType
+    def test_translates_a_mismatched_candidate_id_via_ili(
+        self, fake_wn_with_ili: types.ModuleType
     ) -> None:
         from linkingtk.sources.wn import WnEntitySource
 
-        vocabulary = SenseVocabulary(["s-bank-1"], lexicon="omw-en:1.4")
-        encoder = EwiserEncoder(
-            model_name_or_path=_TINY_MODEL, vocabulary=vocabulary, decoder_hidden_dim=8
-        )
-        linker = EwiserLinker(encoder)
+        linker = self._linker(SenseVocabulary(["omw-en-00319111-v"], lexicon="omw-en:1.4"))
         mention, _sense1, _sense2 = _mention_and_senses()
+        sense = Entity(id="oewn-00319912-v", labels=["stretch"], description="")
 
-        linker.score_candidates([mention], WnEntitySource(lexicon="omw-en:1.4"))
+        translated = linker._translate_for_scoring(
+            [(mention, sense)], WnEntitySource(lexicon="oewn:2021")
+        )
 
-    def test_vocabulary_without_a_lexicon_skips_the_check(
-        self, fake_wn: types.ModuleType
+        assert len(translated) == 1
+        translated_mention, translated_sense = translated[0]
+        assert translated_mention is mention
+        assert translated_sense.id == "omw-en-00319111-v"
+        assert translated_sense.labels == sense.labels  # everything but id is untouched
+
+    def test_candidate_with_no_ili_match_passes_through_unchanged(
+        self, fake_wn_with_ili: types.ModuleType
     ) -> None:
         from linkingtk.sources.wn import WnEntitySource
 
-        encoder = EwiserEncoder(
-            model_name_or_path=_TINY_MODEL, vocabulary=_vocab(), decoder_hidden_dim=8
-        )
-        linker = EwiserLinker(encoder)
+        linker = self._linker(SenseVocabulary(["omw-en-00319111-v"], lexicon="omw-en:1.4"))
         mention, _sense1, _sense2 = _mention_and_senses()
+        sense = Entity(id="oewn-no-ili-v", labels=["x"], description="")
 
-        linker.score_candidates([mention], WnEntitySource(lexicon="oewn:2021"))
+        translated = linker._translate_for_scoring(
+            [(mention, sense)], WnEntitySource(lexicon="oewn:2021")
+        )
+
+        assert translated == [(mention, sense)]
+
+    def test_matching_lexicon_is_a_no_op(self, fake_wn_with_ili: types.ModuleType) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        linker = self._linker(SenseVocabulary(["omw-en-00319111-v"], lexicon="omw-en:1.4"))
+        mention, _sense1, _sense2 = _mention_and_senses()
+        sense = Entity(id="omw-en-00319111-v", labels=["x"], description="")
+
+        translated = linker._translate_for_scoring(
+            [(mention, sense)], WnEntitySource(lexicon="omw-en:1.4")
+        )
+
+        assert translated == [(mention, sense)]
+
+    def test_vocabulary_without_a_lexicon_is_a_no_op(
+        self, fake_wn_with_ili: types.ModuleType
+    ) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        linker = self._linker(_vocab())  # from_wn -- no lexicon
+        mention, _sense1, _sense2 = _mention_and_senses()
+        sense = Entity(id="oewn-00319912-v", labels=["x"], description="")
+
+        translated = linker._translate_for_scoring(
+            [(mention, sense)], WnEntitySource(lexicon="oewn:2021")
+        )
+
+        assert translated == [(mention, sense)]
+
+    def test_plain_list_dataset2_is_a_no_op(self, fake_wn_with_ili: types.ModuleType) -> None:
+        linker = self._linker(SenseVocabulary(["omw-en-00319111-v"], lexicon="omw-en:1.4"))
+        mention, _sense1, _sense2 = _mention_and_senses()
+        sense = Entity(id="oewn-00319912-v", labels=["x"], description="")
+
+        translated = linker._translate_for_scoring([(mention, sense)], [sense])
+
+        assert translated == [(mention, sense)]
+
+    def test_score_candidates_resolves_across_lexicons_end_to_end(
+        self, fake_wn_with_ili: types.ModuleType
+    ) -> None:
+        from linkingtk.sources.wn import WnEntitySource
+
+        linker = self._linker(SenseVocabulary(["omw-en-00319111-v"], lexicon="omw-en:1.4"))
+        mention = Entity(id="m1", labels=["stretch"], context=("stretch the shoe", 0, 7))
+
+        candidates = linker.score_candidates(
+            [mention], WnEntitySource(lexicon="oewn:2021", lang="en")
+        )
+
+        assert len(candidates["m1"]) == 1
+        candidate_id, score = candidates["m1"][0]
+        assert candidate_id == "oewn-00319912-v"  # untranslated -- dataset2's own id
+        assert score != float("-inf")
 
 
 class _FakeWnError(Exception):
