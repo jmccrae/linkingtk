@@ -29,6 +29,7 @@ nav:
       - Overview: examples/index.md
       - Baseline across all four tasks: examples/mvp_benchmark.md
       - LLM linker benchmarks (EA/EL/WSD): examples/llm_benchmark.md
+      - Comparative benchmark harness (all tiers): examples/comparative_benchmark.md
       - Entity Alignment:
           - String similarity: examples/string_similarity_ea.md
           - Feature-based classifier: examples/feature_classifier_ea.md
