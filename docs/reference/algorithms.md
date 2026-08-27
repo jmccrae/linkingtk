@@ -18,6 +18,12 @@
 
 ::: linkingtk.algorithms.llm
 
+::: linkingtk.algorithms._llm_prompting
+
+## LLM re-ranker
+
+::: linkingtk.algorithms.llm_reranker
+
 ## Entity Alignment
 
 ::: linkingtk.algorithms.ea

@@ -213,16 +213,22 @@ class GlossBertLinker(BaseLinker):
         self.model = GlossBertEncoder(model_name_or_path, max_length, forward_batch_size)
         self.matching = matching
 
-    def link(
+    def score_candidates(
         self,
         dataset1: list[Entity],
         dataset2: list[Entity] | EntitySource,
-        graph: Graph = None,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
-    ) -> list[AlignmentResult]:
+    ) -> dict[str, list[tuple[str, float]]]:
+        """Blocked candidates per source entity, scored but not yet matched.
+
+        Satisfies [CandidateScorer][linkingtk.algorithms.llm_reranker.CandidateScorer]
+        -- what `link()` itself builds internally, exposed so
+        [LlmRerankerLinker][linkingtk.algorithms.llm_reranker.LlmRerankerLinker]
+        (#23) can re-rank a narrowed top-k instead of every blocked pair.
+        """
         pairs = list(blocking.candidate_pairs(dataset1, dataset2))
         if not pairs:
-            return []
+            return {}
 
         with torch.no_grad():
             self.model.eval()
@@ -233,4 +239,13 @@ class GlossBertLinker(BaseLinker):
         for (entity1, entity2), score in zip(pairs, scores.tolist(), strict=True):
             candidates_by_source[entity1.id].append((entity2.id, score))
 
-        return self.matching.match(candidates_by_source)
+        return candidates_by_source
+
+    def link(
+        self,
+        dataset1: list[Entity],
+        dataset2: list[Entity] | EntitySource,
+        graph: Graph = None,
+        blocking: BlockingStrategy = DEFAULT_BLOCKING,
+    ) -> list[AlignmentResult]:
+        return self.matching.match(self.score_candidates(dataset1, dataset2, blocking))

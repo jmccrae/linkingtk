@@ -43,12 +43,14 @@ nav:
           - EL against live Wikidata: examples/wikidata_el.md
           - Fully-offline EL via a local vector index: examples/vector_index_el.md
           - Building a vector index from a real Wikidata dump: examples/build_wikidata_vector_index.md
+          - LLM re-ranking over BLINK candidates: examples/blink_llm_reranker_benchmark.md
       - Word Sense Disambiguation:
           - Lesk WSD: examples/lesk_wsd.md
           - WSD against live WordNet (wn): examples/wn_wsd.md
           - GlossBERT reproduction: examples/glossbert_reproduction.md
           - GlossBERT training verification: examples/glossbert_benchmark.md
           - GlossBERT full-corpus training: examples/glossbert_full_training.md
+          - LLM re-ranking over GlossBERT candidates: examples/glossbert_llm_reranker_benchmark.md
           - EWISER reproduction: examples/ewiser_reproduction.md
           - EWISER training verification: examples/ewiser_benchmark.md
           - EWISER pretrained output embedding: examples/ewiser_pretrained_output_embedding.md
