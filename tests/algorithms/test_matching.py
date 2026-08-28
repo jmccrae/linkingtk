@@ -44,6 +44,18 @@ class TestMatchingStrategies:
     def test_optimal_matches_empty_input(self) -> None:
         assert OptimalMatcher().match({}) == []
 
+    def test_greedy_breaks_ties_by_candidate_order_not_target_id(self) -> None:
+        # T-zzz appears first in the candidate list (e.g. an EntitySource's
+        # own most-frequent-sense-first order); tied scores must keep it
+        # first rather than falling back to alphabetical target_id, which
+        # would wrongly promote T-aaa (issue #66).
+        candidates = {"A1": [("T-zzz", 0.0), ("T-aaa", 0.0)]}
+
+        results = GreedyMatcher().match(candidates)
+
+        assert results[0].target_id == "T-zzz"
+        assert results[0].alternatives == ["T-aaa"]
+
     def test_optimal_resolves_collision_with_unbounded_scores(self) -> None:
         # word_overlap-style raw counts, not bounded to [0, 1] -- exercises
         # the dynamically-computed sentinel cost rather than a fixed one.

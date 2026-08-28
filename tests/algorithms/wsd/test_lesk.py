@@ -38,6 +38,25 @@ def test_lesk_only_considers_candidates_from_blocking() -> None:
     assert results == []
 
 
+def test_lesk_falls_back_to_first_listed_sense_on_zero_overlap() -> None:
+    # No context word overlaps any gloss, so every candidate ties at
+    # score 0.0. The fallback should be the most-frequent sense -- i.e.
+    # whichever candidate the blocking step (and, for a real WnEntitySource,
+    # the lexicon's own sense order) listed first -- not whichever
+    # target_id happens to sort first alphabetically. "zzz.n.01" is
+    # deliberately last alphabetically to prove this (issue #66).
+    mentions = [Entity(id="m1", labels=["tree"], context="he was a famous actor")]
+    senses = [
+        Entity(id="zzz.n.01", labels=["tree"], description="a woody perennial plant"),
+        Entity(id="aaa.n.02", labels=["tree"], description="a surname"),
+    ]
+
+    results = LeskLinker().link(mentions, senses)
+
+    assert results[0].target_id == "zzz.n.01"
+    assert results[0].score == 0.0
+
+
 def test_lesk_handles_multiple_mentions_independently() -> None:
     mentions = [
         Entity(id="m1", labels=["bank"], context="deposited cash at the bank"),

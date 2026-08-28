@@ -17,8 +17,20 @@ from linkingtk.core.result import AlignmentResult
 
 
 def _rank_candidates(candidates: list[tuple[str, float]]) -> list[tuple[str, float]]:
-    """Sort ``(target_id, score)`` candidates by descending score, id tie-break."""
-    return sorted(candidates, key=lambda item: (-item[1], item[0]))
+    """Sort ``(target_id, score)`` candidates by descending score.
+
+    Ties keep ``candidates``' original relative order (Python's ``sorted``
+    is stable) rather than breaking them by ``target_id`` -- for an
+    ``EntitySource``-backed candidate set this order is meaningful (e.g.
+    [WnEntitySource.search][linkingtk.sources.wn.WnEntitySource.search]
+    returns a lemma's senses in the lexicon's own most-frequent-sense-first
+    order), so a plain alphabetical id tie-break previously discarded it
+    and could surface an off-topic rare sense over the frequency-preferred
+    one whenever every candidate scored the same -- e.g. a Lesk-style
+    linker's zero-context-overlap case, where every candidate ties at
+    ``0.0`` (issue #66).
+    """
+    return sorted(candidates, key=lambda item: -item[1])
 
 
 class Matcher(ABC):
