@@ -48,9 +48,7 @@ class SenseVocabulary:
             exists.
     """
 
-    def __init__(
-        self, index_to_synset_id: list[str | None], lexicon: str | None = None
-    ) -> None:
+    def __init__(self, index_to_synset_id: list[str | None], lexicon: str | None = None) -> None:
         self._index_to_synset_id = index_to_synset_id
         self.lexicon = lexicon
         self._synset_id_to_index = {
