@@ -11,7 +11,7 @@ each candidate's span in it.
 Reimplemented from understanding the reference's own
 ``esc/utils/definitions_tokenizer.py`` (``prepare_sample_without_st``), not
 copied -- the reference repo is CC-BY-NC-SA 4.0, incompatible with
-redistributing literal code under this package's MIT license (see
+redistributing literal code under this package's Apache-2.0 license (see
 [EwiserEncoder][linkingtk.algorithms.wsd.ewiser.EwiserEncoder]'s module
 docstring for the same constraint on the EWISER port). Uses the fast
 tokenizer's own `Encoding.sequence_ids` property to tell `sequence1`'s

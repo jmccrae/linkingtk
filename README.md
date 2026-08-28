@@ -57,3 +57,7 @@ uv run mkdocs build --strict
 
 Docs are built and deployed to GitHub Pages automatically on every push to
 `main` (see `.github/workflows/docs.yml`).
+
+## License
+
+Apache License 2.0 — see [`LICENSE`](./LICENSE).

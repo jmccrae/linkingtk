@@ -19,7 +19,7 @@ once.
 Reimplemented from the paper and from understanding the reference's own
 source (`esc/esc_pl_module.py`, `esc/utils/definitions_tokenizer.py`), not
 ported from it -- the reference repo is CC-BY-NC-SA 4.0, incompatible with
-redistributing literal code under this package's MIT license (same
+redistributing literal code under this package's Apache-2.0 license (same
 constraint already documented in
 [EwiserEncoder][linkingtk.algorithms.wsd.ewiser.EwiserEncoder]'s module
 docstring for the EWISER port). Confirmed directly against the paper's own

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A toolkit unifying Entity Alignment, Entity Linking, Word Sense Disambiguation and Word Sense Alignment."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 dependencies = [
     "transformers>=4.40",
     "datasets>=2.19",

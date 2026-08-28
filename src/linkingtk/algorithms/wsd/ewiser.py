@@ -24,7 +24,7 @@ linker in this package uses), but computes it very differently internally
 Reimplemented from the paper and from the tensor shapes/keys observed
 directly in the three checkpoints released alongside it (not ported from
 EWISER's own source, which is CC-BY-NC-SA 4.0 licensed -- incompatible
-with redistributing literal code under this package's MIT license).
+with redistributing literal code under this package's Apache-2.0 license).
 Confirmed by reading the reference's own model/criterion code directly
 (not guessed):
 
