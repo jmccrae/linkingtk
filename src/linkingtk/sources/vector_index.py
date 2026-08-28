@@ -37,14 +37,28 @@ if TYPE_CHECKING:
 
 class Embedder(Protocol):
     """Structural type for a batch text encoder, e.g.
-    `sentence_transformers.SentenceTransformer`'s own `encode(list[str]) ->
-    np.ndarray` (with its default `convert_to_numpy=True`) matches this
-    directly -- no wrapper class needed, the same way
+    `sentence_transformers.SentenceTransformer`'s own `encode(list[str],
+    batch_size=...) -> np.ndarray` (with its default `convert_to_numpy=True`)
+    matches this directly -- no wrapper class needed, the same way
     [Vectorizer][linkingtk.blocking.embedding.Vectorizer] matches
     scikit-learn's `fit_transform`/`transform` interface.
+
+    `batch_size` must be accepted (even if a concrete `Embedder` ignores
+    it): `VectorIndexEntitySource.build` always passes it explicitly,
+    since `SentenceTransformer.encode` otherwise silently re-chunks
+    whatever's handed to it into its own default sub-batches of 32 for the
+    actual forward passes -- regardless of how many texts the call itself
+    received. That single silent default was confirmed (profiling a real
+    GPU) to cap throughput at ~7k texts/s no matter the caller's batch
+    size, vs. ~39k texts/s once a sane batch size (512+) is actually
+    threaded through -- a >5x slowdown, and the real reason a full
+    Wikidata-dump build was taking over two days (issue #68), not the low
+    CPU utilization that made it look like a parallelism problem.
     """
 
-    def encode(self, texts: list[str], /) -> npt.NDArray[np.floating[Any]]: ...
+    def encode(
+        self, texts: list[str], /, batch_size: int = 32
+    ) -> npt.NDArray[np.floating[Any]]: ...
 
 
 def _build_or_load_offsets(path: Path) -> npt.NDArray[np.int64]:
@@ -209,7 +223,15 @@ class VectorIndexEntitySource(EntitySource):
             sample_size: Max texts sampled (reservoir sampling, so not
                 biased toward `entities`' start) to fit the SVD projection.
                 Ignored if `reduced_dim` is `None`.
-            batch_size: Entities encoded per `embedder.encode` call.
+            batch_size: Entities encoded per `embedder.encode` call, and
+                (issue #68) the exact `batch_size` passed to `encode`
+                itself -- for `SentenceTransformer`, this is what actually
+                sizes each forward pass; leaving it unset instead defaults
+                to `SentenceTransformer`'s own hardcoded 32 regardless of
+                how many texts a call receives, confirmed (profiling a
+                real GPU) to cap throughput over 5x below what a real
+                batch size (512+) reaches -- the true bottleneck behind a
+                multi-day Wikidata-scale build, not CPU parallelism.
 
         Raises:
             OptionalDependencyError: If `faiss` isn't installed.
@@ -236,7 +258,14 @@ class VectorIndexEntitySource(EntitySource):
                 )
             sample = _reservoir_sample_texts(entities, sample_size, extract)
             if sample:
-                sample_vectors = np.asarray(embedder.encode(sample))
+                # `batch_size` is `Embedder.encode`'s own forward-pass chunk
+                # size (see its docstring) -- passed explicitly here too,
+                # not just below in `flush_batch`, since `sample_size`
+                # defaults to 100_000 and an embedder that (like
+                # `SentenceTransformer`) chunks internally would otherwise
+                # process this whole one-off call in its own default
+                # sub-batches of 32 rather than `batch_size`.
+                sample_vectors = np.asarray(embedder.encode(sample, batch_size=batch_size))
                 _, _, vh_full = np.linalg.svd(sample_vectors, full_matrices=False)
                 # A too-small/low-rank sample (fewer distinct texts than
                 # reduced_dim) can't fit a projection of the requested size --
@@ -263,7 +292,9 @@ class VectorIndexEntitySource(EntitySource):
                 nonlocal index
                 if not batch:
                     return
-                vectors = _project_and_normalize(np.asarray(embedder.encode(batch_texts)), vh)
+                vectors = _project_and_normalize(
+                    np.asarray(embedder.encode(batch_texts, batch_size=batch_size)), vh
+                )
                 if index is None:
                     index = faiss.IndexFlatIP(vectors.shape[1])
                 index.add(vectors)

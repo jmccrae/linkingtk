@@ -20,13 +20,34 @@ class _FakeEmbedder:
     def __init__(self, dim: int = 26) -> None:
         self.dim = dim
 
-    def encode(self, texts: list[str]) -> np.ndarray:
+    def encode(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
         vectors = np.zeros((len(texts), self.dim), dtype=np.float32)
         for row, text in enumerate(texts):
             for char in text.lower():
                 if "a" <= char <= "z":
                     vectors[row, ord(char) - ord("a")] += 1.0
         return vectors
+
+
+class _RecordingEmbedder(_FakeEmbedder):
+    """Records every `batch_size` it was called with.
+
+    Regression coverage for issue #68: `build` must pass its own
+    `batch_size` through to `embedder.encode` explicitly -- a
+    `SentenceTransformer`-backed embedder otherwise silently re-chunks
+    into its own default sub-batches of 32 for the actual forward passes,
+    regardless of how many texts one `encode` call receives (confirmed on
+    a real GPU to cap throughput over 5x below what a real batch size
+    reaches).
+    """
+
+    def __init__(self, dim: int = 26) -> None:
+        super().__init__(dim)
+        self.batch_sizes: list[int] = []
+
+    def encode(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
+        self.batch_sizes.append(batch_size)
+        return super().encode(texts, batch_size)
 
 
 class _FakeIndexFlatIP:
@@ -159,6 +180,19 @@ class TestBuildAndSearch:
 
         assert {e.id for e in source.search("Paris", top_k=3)} >= {"Q1", "Q2"}
         assert source.get("Q3") is not None
+
+    def test_batch_size_is_forwarded_to_embedder_encode(self, tmp_path: Path) -> None:
+        embedder = _RecordingEmbedder()
+
+        VectorIndexEntitySource.build(
+            _ENTITIES, embedder, tmp_path / "idx", reduced_dim=2, sample_size=2, batch_size=2
+        )
+
+        # One call fitting the SVD sample, one+ flushing entities -- every
+        # one of them must carry the caller's own batch_size (2), not
+        # whatever the embedder's own encode() defaults to.
+        assert embedder.batch_sizes
+        assert all(size == 2 for size in embedder.batch_sizes)
 
 
 class _ReiterableEntities:

@@ -400,7 +400,7 @@ class _FakeEmbedder:
     def __init__(self, dim: int = 26) -> None:
         self.dim = dim
 
-    def encode(self, texts: list[str]) -> np.ndarray:
+    def encode(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
         vectors = np.zeros((len(texts), self.dim), dtype=np.float32)
         for row, text in enumerate(texts):
             for char in text.lower():
