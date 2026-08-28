@@ -8,10 +8,10 @@ common interface:
 - **Word Sense Disambiguation (WSD)** — linking mentions in text to dictionary senses.
 - **Word Sense Alignment (WSA)** — matching senses between two dictionaries.
 
-This site is the generated API reference. For a quickstart and installation
-instructions, see the [README](https://github.com/jmccrae/linkingtk#readme).
-For the design rationale, task-to-`Entity` mapping, dataset references, and
-development roadmap, see
+See **[Getting Started](getting_started.md)** for installation and a
+walkthrough of the core interface. This site is also the generated API
+reference. For the design rationale, task-to-`Entity` mapping, dataset
+references, and development roadmap, see
 [DESIGN.md](https://github.com/jmccrae/linkingtk/blob/main/DESIGN.md).
 
 ## API Reference

@@ -25,11 +25,9 @@ theme:
 
 nav:
   - Home: index.md
+  - Getting Started: getting_started.md
   - Examples:
       - Overview: examples/index.md
-      - Baseline across all four tasks: examples/mvp_benchmark.md
-      - LLM linker benchmarks (EA/EL/WSD): examples/llm_benchmark.md
-      - Comparative benchmark harness (all tiers): examples/comparative_benchmark.md
       - Entity Alignment:
           - String similarity: examples/string_similarity_ea.md
           - Feature-based classifier: examples/feature_classifier_ea.md
@@ -60,6 +58,9 @@ nav:
           - ESC training verification: examples/esc_benchmark.md
           - Republishing UFSAC to the Hugging Face Hub: examples/publish_ufsac.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
+      - Advanced Topics:
+          - LLM linker benchmarks (EA/EL/WSD): examples/llm_benchmark.md
+          - Comparative benchmark harness (all tiers): examples/comparative_benchmark.md
   - Datasets:
       - Overview: datasets/index.md
       - Toy datasets: datasets/toy.md
