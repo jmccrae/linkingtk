@@ -2,9 +2,9 @@
 
 AIDA-CoNLL (Hoffart et al., 2011) links named-entity mentions in Reuters
 newswire text (the CoNLL 2003 NER corpus) to Wikipedia/Wikidata entities.
-DESIGN.md flags the original release's licensing as murky (the underlying
-CoNLL 2003 text has its own Reuters-derived redistribution history); this
-loader instead uses a community republish already redistributed under a
+The original release's licensing is murky (the underlying CoNLL 2003 text
+has its own Reuters-derived redistribution history); this loader instead
+uses a community republish already redistributed under a
 clear license: the Hugging Face Hub dataset
 ``cyanic-selkie/aida-conll-yago-wikidata`` (cc-by-sa-3.0), which maps the
 original AIDA-YAGO2 annotations onto Wikidata QIDs. Loaded via the

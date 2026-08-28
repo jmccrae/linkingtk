@@ -84,8 +84,8 @@ class CrossEncoderTrainer:
             full target set the way ``Trainer._evaluate`` is: unlike EA/EL
             (where blocking is a scalability shortcut over a semantically
             meaningful full target set, so exhaustive ranking is the
-            honest measure -- see issue #37/#38), DESIGN.md defines WSD
-            blocking as *always* exact, because ranking a mention against
+            honest measure -- see issue #37/#38), WSD blocking is *always*
+            exact, because ranking a mention against
             an unrelated lemma's senses isn't a meaningful question in the
             first place. A mention's own blocking-restricted candidates --
             typically just its lemma's own senses -- *are* the right

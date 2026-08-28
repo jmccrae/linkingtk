@@ -8,10 +8,10 @@ interface:
 - **Word Sense Disambiguation (WSD)** — linking mentions in text to dictionary senses.
 - **Word Sense Alignment (WSA)** — matching senses between two dictionaries.
 
-See [`DESIGN.md`](./DESIGN.md) for the full design rationale, the `Entity`
-and `BaseLinker` interfaces, dataset references, and the algorithm survey
-for each task. The generated API reference is published at
-[john.mccr.ae/linkingtk](https://john.mccr.ae/linkingtk/).
+See the generated documentation at
+[john.mccr.ae/linkingtk](https://john.mccr.ae/linkingtk/) for a
+Getting Started guide, the `Entity`/`BaseLinker` design (Key Concepts),
+dataset references, and the full API reference.
 
 ## Project layout
 

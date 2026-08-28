@@ -2,8 +2,8 @@
 
 EA finds matches between two knowledge graphs, often across languages.
 Entities typically carry labels and descriptions but rarely a context, and
-a supporting graph is normally available. See DESIGN.md for references
-(OpenEA, Simple-HHEA, ChatEA, ProLEA, EntMatcher).
+a supporting graph is normally available. Related systems: OpenEA,
+Simple-HHEA, ChatEA, ProLEA, EntMatcher.
 """
 
 from linkingtk.algorithms.ea.alinet import AliNetLinker

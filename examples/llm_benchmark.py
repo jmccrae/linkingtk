@@ -18,8 +18,8 @@ Datasets:
 - EL: `linkingtk.datasets.wikification.MsnbcDataset` -- Cucerzan (2007)'s
   20-document gold standard. Fetches real Wikipedia lead-paragraph
   descriptions over the network the first time it's run (cached). Also
-  uses `LabelOverlap`, not `ExactMatch`, despite DESIGN.md's "EL blocking
-  is mostly exact" -- measured directly: `ExactMatch` gives at least one
+  uses `LabelOverlap`, not `ExactMatch` (the default) -- measured
+  directly: `ExactMatch` gives at least one
   candidate to only 291/747 mentions (39%; mention surface forms in news
   text often don't exactly match their KB entity's canonical Wikipedia
   title), while `LabelOverlap` covers every mention checked. Using

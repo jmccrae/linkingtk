@@ -2,8 +2,8 @@
 
 Scores each blocked candidate pair with a classical ML classifier trained
 on hand-crafted similarity features, rather than a single fixed metric —
-in the style of EntMatcher (https://github.com/DexterZeng/EntMatcher, see
-DESIGN.md's Entity Alignment references). EntMatcher itself is a research
+in the style of EntMatcher (https://github.com/DexterZeng/EntMatcher).
+EntMatcher itself is a research
 repo, not a dependency of this project; the idea reused here is that a
 *globally optimal* one-to-one assignment
 ([OptimalMatcher][linkingtk.matchers.optimal.OptimalMatcher]) can outperform

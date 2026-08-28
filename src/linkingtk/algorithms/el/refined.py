@@ -157,7 +157,7 @@ class ReFinEDLinker(BaseLinker):
     ``self.encoder`` is a plain
     [TrainableModel][linkingtk.train.trainer.TrainableModel]; train it via
     [Trainer][linkingtk.train.trainer.Trainer] directly (matching
-    DESIGN.md's own documented ``Trainer(model=linker_model, ...)``
+    the documented ``Trainer(model=linker_model, ...)``
     interface), then call ``link()``:
 
     ```python

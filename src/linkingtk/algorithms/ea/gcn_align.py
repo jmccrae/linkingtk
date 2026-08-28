@@ -4,8 +4,8 @@ Wang, Z., Lv, Q., Lan, X., & Zhang, Y. (2018). Cross-lingual Knowledge
 Graph Alignment via Graph Convolutional Networks. EMNLP 2018.
 https://aclanthology.org/D18-1032/
 
-The first GNN-based EA linker in this package (see #18's parent issue and
-DESIGN.md's Entity Alignment references) -- unlike every linker in
+The first GNN-based EA linker in this package (see #18's parent issue) --
+unlike every linker in
 ``linkingtk.algorithms.ea`` so far, entity representations come from
 propagating embeddings through a fixed graph convolution over the combined
 relational structure, not from a triple-local translational/distance loss

@@ -25,7 +25,7 @@ class PromptTemplate:
         instruction: The system-message text describing the task and the
             expected judgment -- the only part that varies per task. Entity
             rendering itself (`_format_entity`) is shared across every task,
-            since DESIGN.md's own per-task Entity-shape differences
+            since the per-task Entity-shape differences
             (`labels`/`description`/`context` populated differently per
             task) already fall out of "render whichever fields are
             non-empty" without per-task branching.

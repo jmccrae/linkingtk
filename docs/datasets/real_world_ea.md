@@ -10,7 +10,7 @@ a multi-MB archive on first use and cache it under
 `~/.cache/linkingtk/downloads/` (skip this page if you just want a quick,
 offline example — see the [toy datasets](toy.md) instead).
 
-None of DESIGN.md's originally-named hosts (Google Drive for DBP15K,
+None of the originally-named hosts (Google Drive for DBP15K,
 Dropbox/Figshare for OpenEA) are stable, programmatically fetchable URLs,
 so these loaders instead point at GitHub-hosted rehosts of the same data
 in the same format — see each module's docstring for the exact source and

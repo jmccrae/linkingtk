@@ -13,8 +13,7 @@ class DatasetLoader(ABC):
     """Loads a linking dataset as a pair of entity lists plus ground truth.
 
     Concrete loaders fetch data from its original source where possible,
-    falling back to a republished copy on the Hugging Face Hub (see
-    DESIGN.md's Datasets section for the per-task dataset list).
+    falling back to a republished copy on the Hugging Face Hub.
     """
 
     @abstractmethod

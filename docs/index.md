@@ -9,10 +9,9 @@ common interface:
 - **Word Sense Alignment (WSA)** — matching senses between two dictionaries.
 
 See **[Getting Started](getting_started.md)** for installation and a
-walkthrough of the core interface. This site is also the generated API
-reference. For the design rationale, task-to-`Entity` mapping, dataset
-references, and development roadmap, see
-[DESIGN.md](https://github.com/jmccrae/linkingtk/blob/main/DESIGN.md).
+walkthrough of the core interface, and **[Key Concepts](key_concepts.md)**
+for how Linkers, Blockers, Sources and Matchers fit together. This site is
+also the generated API reference.
 
 ## API Reference
 

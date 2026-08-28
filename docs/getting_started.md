@@ -10,8 +10,8 @@ LinkingTK unifies four text-linking tasks behind one common interface:
 Every task is modeled as matching entities from one dataset to another, so
 the same [`Entity`][linkingtk.core.entity.Entity], `BlockingStrategy` and
 `Evaluator` types work across all four. This page walks through that
-interface end-to-end; see [DESIGN.md](https://github.com/jmccrae/linkingtk/blob/main/DESIGN.md)
-for the rationale behind it.
+interface end-to-end; see [Key Concepts](key_concepts.md) for how the
+pieces fit together.
 
 ## Installation
 

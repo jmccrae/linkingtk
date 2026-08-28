@@ -18,7 +18,7 @@ class BaseLinker(ABC):
     """Common interface for Entity Alignment, Entity Linking, WSD and WSA.
 
     Subclasses implement a single task by consuming two entity datasets
-    (whose shape depends on the task, see DESIGN.md), an optional
+    (whose shape depends on the task), an optional
     supporting graph, and a blocking strategy used to restrict the
     candidate search space.
     """

@@ -1,8 +1,7 @@
 """Knowledge-graph-embedding linker for Entity Alignment.
 
 Wraps pykeen (https://github.com/pykeen/pykeen) translational and bilinear
-embedding models -- TransE, DistMult, RotatE by default, per DESIGN.md's
-pykeen/OpenEA/EntMatcher references -- to score candidate pairs by
+embedding models -- TransE, DistMult, RotatE by default -- to score candidate pairs by
 embedding similarity rather than string/feature similarity. pykeen has no
 built-in Entity Alignment mode (it's a link-prediction library); the
 approach here is a simplified version of the MTransE/IPTransE family's

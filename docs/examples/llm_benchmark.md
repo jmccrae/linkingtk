@@ -33,7 +33,7 @@ themselves:
   these rather than crashing or silently mis-scoring, which is exactly
   the point of that defensive path, but the resulting benchmark was
   meaningless. `llama3.2:3b` was reliable enough for real numbers.
-- `ExactMatch` (DESIGN.md's stated default EL blocking strategy) gives at
+- `ExactMatch` (the default EL blocking strategy) gives at
   least one candidate to only 291 of MSNBC's 747 mentions (39%) --
   measured directly, not assumed -- because mention surface forms in news
   text often don't exactly match their KB entity's canonical Wikipedia
