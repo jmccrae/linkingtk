@@ -10,7 +10,7 @@ References:
 from __future__ import annotations
 
 from linkingtk.algorithms.feature_classifier import FeatureClassifierLinker
-from linkingtk.algorithms.matching import OptimalMatcher
+from linkingtk.matchers import OptimalMatcher
 
 
 class EntMatcherLinker(FeatureClassifierLinker):

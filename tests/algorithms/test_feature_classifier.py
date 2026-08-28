@@ -1,7 +1,6 @@
 import pytest
 
 from linkingtk.algorithms.feature_classifier import DEFAULT_FEATURES, FeatureClassifierLinker
-from linkingtk.algorithms.matching import OptimalMatcher
 from linkingtk.blocking import LabelOverlap, sample_hard_negatives
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
@@ -10,6 +9,7 @@ from linkingtk.core.source import EntitySource
 from linkingtk.datasets.toy import ToyEADataset, ToyWSADataset
 from linkingtk.eval import Evaluator
 from linkingtk.exceptions import LinkingTKError
+from linkingtk.matchers import OptimalMatcher
 
 
 def _blocking() -> LabelOverlap:

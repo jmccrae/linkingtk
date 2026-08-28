@@ -33,13 +33,13 @@ from linkingtk.algorithms.ea._chatea_context import (
 )
 from linkingtk.algorithms.ea._chatea_prompts import build_system_prompt, resolve_dimensions
 from linkingtk.algorithms.ea._chatea_reasoning import ReasoningConfig, rerank_candidates
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity, label_texts
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError
 from linkingtk.llm.client import LlmClient
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.graph import Graph, to_triples
 
 if TYPE_CHECKING:

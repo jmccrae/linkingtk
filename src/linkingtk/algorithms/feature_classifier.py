@@ -6,7 +6,7 @@ in the style of EntMatcher (https://github.com/DexterZeng/EntMatcher, see
 DESIGN.md's Entity Alignment references). EntMatcher itself is a research
 repo, not a dependency of this project; the idea reused here is that a
 *globally optimal* one-to-one assignment
-([OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher]) can outperform
+([OptimalMatcher][linkingtk.matchers.optimal.OptimalMatcher]) can outperform
 independent per-source argmax matching, regardless of what produces the
 underlying similarity score.
 """
@@ -26,7 +26,6 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.algorithms.string_similarity import jaccard, levenshtein_similarity, word_overlap
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.embedding import Vectorizer
@@ -35,6 +34,7 @@ from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.core.text import Field, resolve_field
 from linkingtk.exceptions import LinkingTKError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.graph import Graph
 
 logger = logging.getLogger("linkingtk")
@@ -113,11 +113,11 @@ class FeatureClassifierLinker(BaseLinker):
             ``sklearn.pipeline.make_pipeline``.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher] (each source
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher] (each source
             entity's highest-scoring candidate, independently, like
             ``StringSimilarityLinker`` — multiple source entities may map
             to the same target). Pass
-            [OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher] for a globally
+            [OptimalMatcher][linkingtk.matchers.optimal.OptimalMatcher] for a globally
             optimal one-to-one assignment instead, which can outperform
             greedy matching when two source entities' individually-best
             candidate is the same target. See

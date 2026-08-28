@@ -26,6 +26,7 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
+  - Key Concepts: key_concepts.md
   - Examples:
       - Overview: examples/index.md
       - Entity Alignment:
@@ -72,6 +73,7 @@ nav:
       - Core: reference/core.md
       - Sources: reference/sources.md
       - Blocking: reference/blocking.md
+      - Matchers: reference/matchers.md
       - Algorithms: reference/algorithms.md
       - Datasets: reference/datasets.md
       - Utils: reference/utils.md

@@ -92,12 +92,12 @@ from linkingtk.algorithms.ea._rdgcn_training import (
     build_relation_masks,
     init_name_embeddings,
 )
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity, label_texts
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, build_id_mappings, map_triples_to_ids, to_triples
 from linkingtk.utils.sparse_gcn import coo_to_torch_sparse, normalize_adjacency_coo
@@ -150,7 +150,7 @@ class RDGCNLinker(BaseLinker):
             location.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
         device: Torch device to train on, e.g. ``"cpu"`` (default) or
             ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
             as CPU numpy arrays regardless of this setting.

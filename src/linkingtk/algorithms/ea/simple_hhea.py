@@ -33,12 +33,12 @@ from linkingtk.algorithms.ea._simple_hhea_name import compute_kernel_bias, embed
 from linkingtk.algorithms.ea._simple_hhea_structure import build_structure_embeddings
 from linkingtk.algorithms.ea._simple_hhea_torch import SimpleHHEAModel, build_time_histogram
 from linkingtk.algorithms.ea._simple_hhea_training import train as train_simple_hhea
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, to_triples
 
@@ -95,7 +95,7 @@ class SimpleHHEALinker(BaseLinker):
             [train][linkingtk.algorithms.ea._simple_hhea_training.train].
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
         device: Torch device to train/embed on, e.g. `"cpu"` (default) or
             `"cuda"`.
     """

@@ -58,11 +58,11 @@ import torch
 from torch import nn
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity, description_text, label_texts
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.graph import Graph
 
 
@@ -249,7 +249,7 @@ class GlossBertLinker(BaseLinker):
             `model` is given.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
         model: An already-built `GlossBertEncoder` (e.g. from
             `GlossBertEncoder.from_checkpoint`), used as-is instead of
             constructing one from `model_name_or_path`.

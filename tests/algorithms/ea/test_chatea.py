@@ -9,11 +9,11 @@ import pytest
 from linkingtk.algorithms.ea._chatea_context import NeighborIndex
 from linkingtk.algorithms.ea._chatea_prompts import resolve_dimensions
 from linkingtk.algorithms.ea.chatea import ChatEALinker
-from linkingtk.algorithms.matching import GreedyMatcher
 from linkingtk.core.entity import Entity
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError
 from linkingtk.llm.client import LlmClient, LlmMessage
+from linkingtk.matchers import GreedyMatcher
 
 
 class _FakeEmbeddingLinker:

@@ -26,12 +26,12 @@ from linkingtk.algorithms._llm_prompting import (
     _resolve_candidate_id,
 )
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.llm.client import LlmClient
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.graph import Graph
 
 logger = logging.getLogger("linkingtk")

@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from linkingtk.algorithms.llm import EA_PROMPT, EL_PROMPT, WSA_PROMPT, WSD_PROMPT, LlmBaseLinker
-from linkingtk.algorithms.matching import GreedyMatcher, OptimalMatcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.core.entity import Entity
 from linkingtk.core.source import EntitySource
 from linkingtk.llm.client import LlmClient, LlmMessage
+from linkingtk.matchers import GreedyMatcher, OptimalMatcher
 
 
 class _AllPairs(BlockingStrategy):

@@ -17,13 +17,13 @@ from functools import cache
 from typing import Literal
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.trie import edit_distance
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.core.text import Field, resolve_field, tokenize
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.graph import Graph
 
 MetricName = Literal["word_overlap", "jaccard", "levenshtein"]
@@ -87,10 +87,10 @@ class StringSimilarityLinker(BaseLinker):
             instead, for metrics not covered above.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher] (each source
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher] (each source
             entity's highest-scoring candidate, independently — multiple
             sources may map to the same target). Pass
-            [OptimalMatcher][linkingtk.algorithms.matching.OptimalMatcher] for a globally
+            [OptimalMatcher][linkingtk.matchers.optimal.OptimalMatcher] for a globally
             optimal one-to-one assignment instead.
     """
 

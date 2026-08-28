@@ -103,12 +103,12 @@ from linkingtk.algorithms.ea._attre_torch import train_attr_epoch, train_joint_e
 from linkingtk.algorithms.ea._iptranse_torch import validation_hits1
 from linkingtk.algorithms.ea._iptranse_training import build_shared_id_mappings
 from linkingtk.algorithms.ea._kdcoe_torch import build_kg_context, train_structural_epoch
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, Triple, map_triples_to_ids, to_triples
 
@@ -151,7 +151,7 @@ class AttrELinker(BaseLinker):
             published value is ``0.0001``.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
         device: Torch device to train on, e.g. ``"cpu"`` (default) or
             ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
             as CPU numpy arrays regardless of this setting.

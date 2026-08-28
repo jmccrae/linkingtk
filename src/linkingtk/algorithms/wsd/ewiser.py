@@ -81,7 +81,6 @@ import torch
 from torch import nn
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.algorithms.wsd._ewiser_decoder import EwiserDecoder, load_fairseq_checkpoint
 from linkingtk.algorithms.wsd._ewiser_text import (
     mean_pool_subwords,
@@ -96,6 +95,7 @@ from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.graph import Graph
 
 
@@ -413,7 +413,7 @@ class EwiserLinker(BaseLinker):
         model: The `EwiserEncoder` to score candidates with.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
     """
 
     def __init__(self, model: EwiserEncoder, matching: Matcher = DEFAULT_MATCHER) -> None:

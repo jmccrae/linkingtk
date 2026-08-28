@@ -97,12 +97,12 @@ from linkingtk.algorithms.ea._sea_torch import (
     train_structural_epoch,
     validation_hits1,
 )
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, build_id_mappings, map_triples_to_ids, to_triples
 
@@ -139,7 +139,7 @@ class SEALinker(BaseLinker):
             is ``0.25``.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
         device: Torch device to train on, e.g. ``"cpu"`` (default) or
             ``"cuda"``/``"cuda:0"``. Trained embeddings are always stored
             as CPU numpy arrays regardless of this setting.

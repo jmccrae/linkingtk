@@ -2,10 +2,6 @@
 
 ::: linkingtk.algorithms.base
 
-## Matching
-
-::: linkingtk.algorithms.matching
-
 ## String-similarity baseline
 
 ::: linkingtk.algorithms.string_similarity

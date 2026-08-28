@@ -4,11 +4,11 @@ from typing import Any
 
 from linkingtk.algorithms.base import DEFAULT_BLOCKING
 from linkingtk.algorithms.llm_reranker import LlmRerankerLinker
-from linkingtk.algorithms.matching import GreedyMatcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 from linkingtk.core.source import EntitySource
 from linkingtk.llm.client import LlmClient, LlmMessage
+from linkingtk.matchers import GreedyMatcher
 
 
 class _AllPairs(BlockingStrategy):

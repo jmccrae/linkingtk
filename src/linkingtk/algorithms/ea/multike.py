@@ -168,13 +168,13 @@ from linkingtk.algorithms.ea._multike_torch import (
     train_cross_kg_relation_predicate_epoch,
     train_relation_view_epoch,
 )
-from linkingtk.algorithms.matching import DEFAULT_MATCHER, Matcher
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity, label_texts
 from linkingtk.core.result import AlignmentResult
 from linkingtk.core.source import EntitySource
 from linkingtk.datasets._util import label_from_raw
 from linkingtk.exceptions import LinkingTKError, OptionalDependencyError
+from linkingtk.matchers import DEFAULT_MATCHER, Matcher
 from linkingtk.utils.device import resolve_device
 from linkingtk.utils.graph import Graph, Triple, build_id_mappings, map_triples_to_ids, to_triples
 
@@ -234,7 +234,7 @@ class MultiKELinker(BaseLinker):
             encoder for every name/value string.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
-            [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+            [GreedyMatcher][linkingtk.matchers.greedy.GreedyMatcher].
         device: Torch device to train on, e.g. ``"cpu"`` (default) or
             ``"cuda"``/``"cuda:0"``. Also used for the literal encoder's
             forward pass. Trained embeddings are always stored as CPU

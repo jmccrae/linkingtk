@@ -1,4 +1,4 @@
-from linkingtk.algorithms.matching import GreedyMatcher, OptimalMatcher
+from linkingtk.matchers import GreedyMatcher, OptimalMatcher
 
 
 class TestMatchingStrategies:

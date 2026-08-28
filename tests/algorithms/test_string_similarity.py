@@ -1,10 +1,10 @@
-from linkingtk.algorithms.matching import GreedyMatcher, OptimalMatcher
 from linkingtk.algorithms.string_similarity import StringSimilarityLinker
 from linkingtk.algorithms.wsd import LeskLinker
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.core.entity import Entity
 from linkingtk.core.source import EntitySource
+from linkingtk.matchers import GreedyMatcher, OptimalMatcher
 
 
 class _AllPairs(BlockingStrategy):
