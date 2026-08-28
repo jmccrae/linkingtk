@@ -171,3 +171,38 @@ class TestTextFormatting:
         scores = encoder.score([(mention, sense)])
 
         assert scores.shape == (1,)
+
+
+class TestFromCheckpoint:
+    def test_loaded_encoder_matches_source_weights(self, tmp_path: Path) -> None:
+        # Same interface/name as EwiserEncoder.from_checkpoint/EscEncoder.from_checkpoint
+        # (issue #64) -- here the "checkpoint" is just a local HF directory,
+        # so from_checkpoint is a thin wrapper around the constructor.
+        source = GlossBertEncoder(model_name_or_path=_TINY_MODEL, max_length=32)
+        checkpoint_dir = tmp_path / "checkpoint"
+        source.model.save_pretrained(checkpoint_dir)
+        source.tokenizer.save_pretrained(checkpoint_dir)
+
+        loaded = GlossBertEncoder.from_checkpoint(checkpoint_dir, max_length=32)
+        mention = Entity(id="m1", labels=["bank"], context=("I sat by the bank", 13, 17))
+        sense = Entity(id="s1", labels=["bank"], description="sloping land beside water")
+
+        scores = loaded.score([(mention, sense)])
+
+        assert scores.shape == (1,)
+        assert torch.allclose(
+            dict(loaded.model.named_parameters())["classifier.weight"],
+            dict(source.model.named_parameters())["classifier.weight"],
+        )
+
+    def test_linker_accepts_prebuilt_model(self, tmp_path: Path) -> None:
+        # Matches EwiserLinker(encoder)/EscLinker(encoder)'s pattern.
+        source = GlossBertEncoder(model_name_or_path=_TINY_MODEL, max_length=32)
+        checkpoint_dir = tmp_path / "checkpoint"
+        source.model.save_pretrained(checkpoint_dir)
+        source.tokenizer.save_pretrained(checkpoint_dir)
+        encoder = GlossBertEncoder.from_checkpoint(checkpoint_dir, max_length=32)
+
+        linker = GlossBertLinker(model=encoder)
+
+        assert linker.model is encoder

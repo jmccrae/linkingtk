@@ -38,9 +38,12 @@ implementation's own data-preparation code
   same way, without a GlossBERT-specific loss function).
 
 Because the architecture matches exactly, `GlossBertEncoder` also loads
-the paper's own published checkpoint directly (pass its local directory
-as `model_name_or_path`) -- see `examples/glossbert_reproduction.py` for
-a real evaluation against it.
+the paper's own published checkpoint directly via
+`GlossBertEncoder.from_checkpoint` (same entry point name as
+[EwiserEncoder.from_checkpoint][linkingtk.algorithms.wsd.ewiser.EwiserEncoder.from_checkpoint]/
+[EscEncoder.from_checkpoint][linkingtk.algorithms.wsd.esc.EscEncoder.from_checkpoint],
+issue #64) -- see `examples/glossbert_reproduction.py` for a real
+evaluation against it.
 
 See [GlossBertEncoder][linkingtk.algorithms.wsd.glossbert.GlossBertEncoder]
 and [GlossBertLinker][linkingtk.algorithms.wsd.glossbert.GlossBertLinker].
@@ -49,6 +52,7 @@ and [GlossBertLinker][linkingtk.algorithms.wsd.glossbert.GlossBertLinker].
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 
 import torch
 from torch import nn
@@ -148,6 +152,40 @@ class GlossBertEncoder(nn.Module):
         self.max_length = max_length
         self.forward_batch_size = forward_batch_size
 
+    @classmethod
+    def from_checkpoint(
+        cls,
+        checkpoint_path: str | Path,
+        max_length: int = 512,
+        forward_batch_size: int = 32,
+    ) -> GlossBertEncoder:
+        """Load the paper's own published checkpoint directory (e.g. `Sent_CLS_WS`, extracted).
+
+        Same entry point name as
+        [EwiserEncoder.from_checkpoint][linkingtk.algorithms.wsd.ewiser.EwiserEncoder.from_checkpoint]/
+        [EscEncoder.from_checkpoint][linkingtk.algorithms.wsd.esc.EscEncoder.from_checkpoint],
+        for a consistent checkpoint-loading interface across WSD linkers
+        (issue #64) -- unlike those two, no format translation is needed
+        here (the paper's checkpoint is already a plain Hugging Face
+        `config.json`/`pytorch_model.bin`/`vocab.txt` directory, exactly
+        what `model_name_or_path` already accepts), so this is a thin
+        wrapper around the constructor.
+
+        Args:
+            checkpoint_path: Local path to the extracted checkpoint
+                directory -- not bundled with this package.
+            max_length: Forwarded to `GlossBertEncoder.__init__`.
+            forward_batch_size: Forwarded to `GlossBertEncoder.__init__`.
+
+        Returns:
+            A `GlossBertEncoder` with the checkpoint's weights loaded.
+        """
+        return cls(
+            model_name_or_path=str(checkpoint_path),
+            max_length=max_length,
+            forward_batch_size=forward_batch_size,
+        )
+
     def score(self, pairs: list[tuple[Entity, Entity]]) -> torch.Tensor:
         """Return a ``(len(pairs),)`` tensor: the class-1-minus-class-0 logit margin per pair."""
         margins = [
@@ -191,16 +229,30 @@ class GlossBertLinker(BaseLinker):
     ```
 
     Or skip training entirely and load the paper's own published
-    checkpoint: ``GlossBertLinker(model_name_or_path="/path/to/Sent_CLS_WS")``.
+    checkpoint, either directly (``GlossBertLinker(model_name_or_path="/path/to/Sent_CLS_WS")``)
+    or, matching [EwiserLinker][linkingtk.algorithms.wsd.ewiser.EwiserLinker]/
+    [EscLinker][linkingtk.algorithms.wsd.esc.EscLinker]'s pattern, by
+    passing an already-built encoder:
+
+    ```python
+    encoder = GlossBertEncoder.from_checkpoint("/path/to/Sent_CLS_WS")
+    linker = GlossBertLinker(model=encoder)
+    ```
 
     Args:
         model_name_or_path: Forwarded to
             [GlossBertEncoder][linkingtk.algorithms.wsd.glossbert.GlossBertEncoder].
-        max_length: Forwarded to ``GlossBertEncoder``.
-        forward_batch_size: Forwarded to ``GlossBertEncoder``.
+            Ignored if `model` is given.
+        max_length: Forwarded to ``GlossBertEncoder``. Ignored if `model`
+            is given.
+        forward_batch_size: Forwarded to ``GlossBertEncoder``. Ignored if
+            `model` is given.
         matching: Strategy used to resolve scored candidates into final
             links. Defaults to
             [GreedyMatcher][linkingtk.algorithms.matching.GreedyMatcher].
+        model: An already-built `GlossBertEncoder` (e.g. from
+            `GlossBertEncoder.from_checkpoint`), used as-is instead of
+            constructing one from `model_name_or_path`.
     """
 
     def __init__(
@@ -209,8 +261,13 @@ class GlossBertLinker(BaseLinker):
         max_length: int = 512,
         forward_batch_size: int = 32,
         matching: Matcher = DEFAULT_MATCHER,
+        model: GlossBertEncoder | None = None,
     ) -> None:
-        self.model = GlossBertEncoder(model_name_or_path, max_length, forward_batch_size)
+        self.model = (
+            model
+            if model is not None
+            else GlossBertEncoder(model_name_or_path, max_length, forward_batch_size)
+        )
         self.matching = matching
 
     def score_candidates(

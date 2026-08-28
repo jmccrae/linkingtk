@@ -34,7 +34,7 @@ from pathlib import Path
 import torch
 
 from linkingtk.algorithms.llm_reranker import LlmRerankerLinker
-from linkingtk.algorithms.wsd.glossbert import GlossBertLinker
+from linkingtk.algorithms.wsd.glossbert import GlossBertEncoder, GlossBertLinker
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.datasets.ufsac import UfsacDataset
 from linkingtk.eval import Evaluator
@@ -74,7 +74,8 @@ def main() -> None:
     checkpoint_dir = _ensure_checkpoint_extracted()
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    linker = GlossBertLinker(model_name_or_path=str(checkpoint_dir), max_length=512)
+    encoder = GlossBertEncoder.from_checkpoint(checkpoint_dir, max_length=512)
+    linker = GlossBertLinker(model=encoder)
     linker.model.to(device)
     blocking = ExactMatch(top_k=50)
 
