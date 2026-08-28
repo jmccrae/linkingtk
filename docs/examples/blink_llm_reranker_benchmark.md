@@ -53,7 +53,7 @@ reorders within its own top-k window, never reaches beyond it (same as
 [#22's own `_merge_llm_rerank`](chatea_ea.md)). But Hits@1 actually
 **dropped** slightly (0.3179 -> 0.317, a ~9-entity swing across the full
 10,000-mention test set, consistent with the sampled breakdown below) --
-unlike the [GlossBERT WSD reranker](glossbert_llm_reranker_benchmark.md),
+unlike the [GlossBERT WSD reranker](glossbert.md#llm-re-ranking-over-glossbert-candidates),
 this one hurts more than it helps on this sample.
 
 Per-entity breakdown of the 30 sampled mentions explains why, rather than

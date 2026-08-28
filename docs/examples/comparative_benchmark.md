@@ -30,7 +30,7 @@ default 30).
 
 Requires: the `kge` optional dependency group; a local UFSAC 2.1 checkout
 at `~/data/ufsac-public-2.1/` and the checkpoint produced by
-[the full-corpus training example](glossbert_full_training.md); a local
+[the full-corpus training example](glossbert.md#full-corpus-training-run); a local
 Ollama server with `ollama pull llama2:13b` (or pass `--model` for a
 different model). AIDA-CoNLL and ICEWS-WIKI are fetched automatically.
 

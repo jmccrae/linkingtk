@@ -47,16 +47,9 @@ nav:
       - Word Sense Disambiguation:
           - Lesk WSD: examples/lesk_wsd.md
           - WSD against live WordNet (wn): examples/wn_wsd.md
-          - GlossBERT reproduction: examples/glossbert_reproduction.md
-          - GlossBERT training verification: examples/glossbert_benchmark.md
-          - GlossBERT full-corpus training: examples/glossbert_full_training.md
-          - LLM re-ranking over GlossBERT candidates: examples/glossbert_llm_reranker_benchmark.md
-          - EWISER reproduction: examples/ewiser_reproduction.md
-          - EWISER training verification: examples/ewiser_benchmark.md
-          - EWISER pretrained output embedding: examples/ewiser_pretrained_output_embedding.md
-          - EWISER full-corpus training: examples/ewiser_full_training.md
-          - ESC reproduction: examples/esc_reproduction.md
-          - ESC training verification: examples/esc_benchmark.md
+          - GlossBERT: examples/glossbert.md
+          - EWISER: examples/ewiser.md
+          - ESC: examples/esc.md
           - Republishing UFSAC to the Hugging Face Hub: examples/publish_ufsac.md
       - ExactMatch blocking & evaluation: examples/exact_match_blocking.md
       - Advanced Topics:
