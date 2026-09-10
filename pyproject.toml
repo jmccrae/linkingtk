@@ -29,7 +29,8 @@ wn = ["wn>=0.9"]
 wikipedia = ["requests>=2.31"]
 vector-index = ["faiss-cpu>=1.8", "sentence-transformers>=3.0"]
 llm = ["openai>=1.50", "anthropic>=0.40"]
-all = ["linkingtk[graph,nlp,kge,wn,wikipedia,vector-index,llm]"]
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
+all = ["linkingtk[graph,nlp,kge,wn,wikipedia,vector-index,llm,server]"]
 
 [dependency-groups]
 dev = [
