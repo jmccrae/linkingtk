@@ -55,6 +55,7 @@ nav:
       - Advanced Topics:
           - LLM linker benchmarks (EA/EL/WSD): examples/llm_benchmark.md
           - Comparative benchmark harness (all tiers): examples/comparative_benchmark.md
+          - REST server mode: examples/rest_server.md
   - Datasets:
       - Overview: datasets/index.md
       - Toy datasets: datasets/toy.md
@@ -74,6 +75,7 @@ nav:
       - Evaluation: reference/eval.md
       - LLM: reference/llm.md
       - Exceptions: reference/exceptions.md
+      - REST Server: reference/server.md
 
 plugins:
   - search
