@@ -11,7 +11,7 @@ import pytest
 
 from linkingtk.core.entity import Entity
 from linkingtk.exceptions import OptionalDependencyError
-from linkingtk.sources.vector_index import VectorIndexEntitySource
+from linkingtk.sources.vector_index import VectorIndexEntitySource, _reservoir_sample_texts
 
 
 class _FakeEmbedder:
@@ -231,6 +231,53 @@ class TestReiterableSource:
             VectorIndexEntitySource.build(
                 (e for e in _ENTITIES), _FakeEmbedder(), tmp_path / "idx", reduced_dim=2
             )
+
+
+class _CountingEntities:
+    """Re-iterable source recording how many entities each pass consumed."""
+
+    def __init__(self, entities: list[Entity]) -> None:
+        self._entities = entities
+        self.consumed: list[int] = []
+
+    def __iter__(self) -> Iterator[Entity]:
+        self.consumed.append(0)
+        for entity in self._entities:
+            self.consumed[-1] += 1
+            yield entity
+
+
+_MANY_ENTITIES = [Entity(id=f"Q{i}", labels=[f"label{i}"]) for i in range(100)]
+
+
+class TestSampleScanLimit:
+    def test_reservoir_only_draws_from_prefix(self) -> None:
+        sample = _reservoir_sample_texts(_MANY_ENTITIES, k=5, extract=lambda e: e.id, scan_limit=10)
+
+        assert len(sample) == 5
+        assert set(sample) <= {f"Q{i}" for i in range(10)}
+
+    def test_reservoir_without_limit_scans_everything(self) -> None:
+        source = _CountingEntities(_MANY_ENTITIES)
+
+        _reservoir_sample_texts(source, k=5, extract=lambda e: e.id)
+
+        assert source.consumed == [100]
+
+    def test_build_stops_sampling_pass_early_but_indexes_everything(self, tmp_path: Path) -> None:
+        source = _CountingEntities(_MANY_ENTITIES)
+
+        index = VectorIndexEntitySource.build(
+            source,
+            _FakeEmbedder(),
+            tmp_path / "idx",
+            reduced_dim=2,
+            sample_size=5,
+            sample_scan_limit=10,
+        )
+
+        assert source.consumed == [10, 100]
+        assert index.get("Q99") is not None
 
 
 class TestGet:

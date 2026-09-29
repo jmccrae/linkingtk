@@ -12,8 +12,10 @@ a quick smoke test against a prefix of it instead.
 Building with `--reduced-dim` set (the default, matching
 [`VectorIndexEntitySource.build`](../reference/sources.md)'s own default)
 makes two passes over the dump -- fitting the SVD sample, then indexing --
-so you'll see two progress bars, one per pass. Pass `--no-reduce` to index
-full-dimensional embeddings in a single pass instead.
+so you'll see two progress bars, one per pass. Pass `--sample-scan-limit`
+to stop the first pass after that many entities (sampling from just that
+prefix of the dump) rather than reading the whole dump twice, or
+`--no-reduce` to index full-dimensional embeddings in a single pass instead.
 
 Requires the `vector-index` optional dependency:
 
@@ -68,6 +70,14 @@ def _parse_args() -> argparse.Namespace:
         default=100_000,
         help="Entities reservoir-sampled to fit the SVD projection. Ignored with --no-reduce.",
     )
+    parser.add_argument(
+        "--sample-scan-limit",
+        type=int,
+        default=None,
+        help="Stop the SVD-sampling pass after reading this many entities, sampling "
+        "only from that prefix of the dump (default: scan the whole dump). "
+        "Ignored with --no-reduce.",
+    )
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument(
         "--limit",
@@ -92,6 +102,7 @@ def main() -> None:
         args.out,
         reduced_dim=None if args.no_reduce else args.reduced_dim,
         sample_size=args.sample_size,
+        sample_scan_limit=args.sample_scan_limit,
         batch_size=args.batch_size,
     )
     print(f"Built index at {args.out}")
