@@ -17,6 +17,7 @@ network calls at all -- e.g. as
 from __future__ import annotations
 
 import dbm
+import itertools
 import json
 import random
 from collections.abc import Callable, Iterable
@@ -119,17 +120,23 @@ def _entity_from_json(raw: str) -> Entity:
 
 
 def _reservoir_sample_texts(
-    entities: Iterable[Entity], k: int, extract: Callable[[Entity], str], seed: int = 42
+    entities: Iterable[Entity],
+    k: int,
+    extract: Callable[[Entity], str],
+    seed: int = 42,
+    scan_limit: int | None = None,
 ) -> list[str]:
     """Uniformly sample up to `k` texts from a single streamed pass over `entities`.
 
     Ported from `wn-wd-entity-align`'s `reservoir_sample_labels`: unlike
     just taking the first `k`, this isn't biased toward whatever `entities`
-    happens to yield first (e.g. a dump sorted by id).
+    happens to yield first (e.g. a dump sorted by id). If `scan_limit` is
+    set, only the first `scan_limit` entities are read -- the sample is then
+    uniform over that prefix, not over all of `entities`.
     """
     rng = random.Random(seed)
     reservoir: list[str] = []
-    for i, entity in enumerate(entities):
+    for i, entity in enumerate(itertools.islice(entities, scan_limit)):
         text = extract(entity)
         if i < k:
             reservoir.append(text)
@@ -189,6 +196,7 @@ class VectorIndexEntitySource(EntitySource):
         field: Field = "label",
         reduced_dim: int | None = 28,
         sample_size: int = 100_000,
+        sample_scan_limit: int | None = None,
         batch_size: int = 4096,
     ) -> VectorIndexEntitySource:
         """Build a fresh index over `entities`, persisted under `path`.
@@ -223,6 +231,14 @@ class VectorIndexEntitySource(EntitySource):
             sample_size: Max texts sampled (reservoir sampling, so not
                 biased toward `entities`' start) to fit the SVD projection.
                 Ignored if `reduced_dim` is `None`.
+            sample_scan_limit: If set, the SVD-fitting pass stops after
+                reading this many entities, reservoir-sampling
+                `sample_size` texts from just that prefix rather than from
+                all of `entities` -- e.g. to avoid streaming a whole
+                Wikidata dump twice when the first few million entities
+                already give a representative sample. `None` (the
+                default) scans everything. Ignored if `reduced_dim` is
+                `None`.
             batch_size: Entities encoded per `embedder.encode` call, and
                 (issue #68) the exact `batch_size` passed to `encode`
                 itself -- for `SentenceTransformer`, this is what actually
@@ -256,7 +272,9 @@ class VectorIndexEntitySource(EntitySource):
                     "iterator/generator -- or pass reduced_dim=None for a one-shot "
                     "iterator."
                 )
-            sample = _reservoir_sample_texts(entities, sample_size, extract)
+            sample = _reservoir_sample_texts(
+                entities, sample_size, extract, scan_limit=sample_scan_limit
+            )
             if sample:
                 # `batch_size` is `Embedder.encode`'s own forward-pass chunk
                 # size (see its docstring) -- passed explicitly here too,
