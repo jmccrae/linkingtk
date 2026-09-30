@@ -3,6 +3,7 @@
 
 from linkingtk.algorithms.base import BaseLinker
 from linkingtk.algorithms.feature_classifier import FeatureClassifierLinker
+from linkingtk.algorithms.kev import KevClient, KevLinker
 from linkingtk.algorithms.llm import LlmBaseLinker
 from linkingtk.algorithms.llm_reranker import LlmRerankerLinker
 from linkingtk.algorithms.string_similarity import StringSimilarityLinker
@@ -10,6 +11,8 @@ from linkingtk.algorithms.string_similarity import StringSimilarityLinker
 __all__ = [
     "BaseLinker",
     "FeatureClassifierLinker",
+    "KevClient",
+    "KevLinker",
     "LlmBaseLinker",
     "LlmRerankerLinker",
     "StringSimilarityLinker",
