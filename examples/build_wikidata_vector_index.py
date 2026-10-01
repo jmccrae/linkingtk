@@ -78,7 +78,17 @@ def _parse_args() -> argparse.Namespace:
         "only from that prefix of the dump (default: scan the whole dump). "
         "Ignored with --no-reduce.",
     )
-    parser.add_argument("--batch-size", type=int, default=4096)
+    parser.add_argument(
+        "--batch-size", type=int, default=4096, help="Labels buffered per embedding call."
+    )
+    parser.add_argument(
+        "--encode-batch-size",
+        type=int,
+        default=32,
+        help="Labels per GPU forward pass. Small by default to keep GPU memory near the "
+        "model's own size: streaming the dump, not embedding, is the bottleneck. Raise it "
+        "(e.g. 512) when building from a fast local file.",
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -104,6 +114,7 @@ def main() -> None:
         sample_size=args.sample_size,
         sample_scan_limit=args.sample_scan_limit,
         batch_size=args.batch_size,
+        encode_batch_size=args.encode_batch_size,
     )
     print(f"Built index at {args.out}")
 

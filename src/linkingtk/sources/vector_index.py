@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
-from linkingtk.core.entity import ContextWithSpan, Entity, LabelWithLang
+from linkingtk.core.entity import ContextWithSpan, Entity, LabelWithLang, label_texts
 from linkingtk.core.source import EntitySource
 from linkingtk.core.text import Field, resolve_field
 from linkingtk.exceptions import OptionalDependencyError
@@ -119,10 +119,24 @@ def _entity_from_json(raw: str) -> Entity:
     )
 
 
+def _row_texts(field: Field) -> Callable[[Entity], list[str]]:
+    """Resolve `field` into the texts an entity gets one index row each for.
+
+    ``"label"`` gives one row per distinct non-empty label, so a query
+    matching any one label exactly isn't diluted by the entity's other
+    labels and aliases (as embedding them space-joined would be). Every
+    other field gives exactly one row per entity.
+    """
+    if field == "label":
+        return lambda entity: [text for text in dict.fromkeys(label_texts(entity)) if text]
+    extract = resolve_field(field)
+    return lambda entity: [extract(entity)]
+
+
 def _reservoir_sample_texts(
     entities: Iterable[Entity],
     k: int,
-    extract: Callable[[Entity], str],
+    extract: Callable[[Entity], list[str]],
     seed: int = 42,
     scan_limit: int | None = None,
 ) -> list[str]:
@@ -136,8 +150,8 @@ def _reservoir_sample_texts(
     """
     rng = random.Random(seed)
     reservoir: list[str] = []
-    for i, entity in enumerate(itertools.islice(entities, scan_limit)):
-        text = extract(entity)
+    texts = (text for entity in itertools.islice(entities, scan_limit) for text in extract(entity))
+    for i, text in enumerate(texts):
         if i < k:
             reservoir.append(text)
         else:
@@ -198,6 +212,7 @@ class VectorIndexEntitySource(EntitySource):
         sample_size: int = 100_000,
         sample_scan_limit: int | None = None,
         batch_size: int = 4096,
+        encode_batch_size: int = 32,
     ) -> VectorIndexEntitySource:
         """Build a fresh index over `entities`, persisted under `path`.
 
@@ -207,8 +222,8 @@ class VectorIndexEntitySource(EntitySource):
         reading directly from a downloaded Wikidata dump.
 
         Args:
-            entities: The entities to index. Each is embedded once, on the
-                text `field` resolves (default: its labels, space-joined).
+            entities: The entities to index, embedded on the text(s) `field`
+                resolves (default: one index row per label).
                 Must be re-iterable (e.g. a `list`, or an object like
                 `WikidataDumpEntities` whose `__iter__` starts fresh each
                 call) when `reduced_dim` is set, since fitting the SVD
@@ -219,10 +234,17 @@ class VectorIndexEntitySource(EntitySource):
                 `sentence_transformers.SentenceTransformer(...)`.
             path: Directory to write the index bundle to (created if
                 missing) -- see `save` for its contents.
-            field: Which entity text to embed: ``"label"`` (all labels,
-                space-joined), ``"description"``, or ``"context"``. A
-                callable taking an ``Entity`` and returning ``str`` may be
-                passed instead, for fields not covered above.
+            field: Which entity text to embed: ``"label"`` (each distinct
+                label embedded as its own index row, all mapping back to
+                the same entity -- so an exact match on any one label isn't
+                diluted by the others), ``"description"``, or
+                ``"context"`` (one row per entity). A callable taking an
+                ``Entity`` and returning ``str`` may be passed instead, for
+                fields not covered above (one row per entity) -- e.g.
+                ``lambda e: " ".join(label_texts(e))`` for the old
+                space-joined-labels behavior. An entity with no text for
+                `field` gets no rows (so is never a search hit), but is
+                still stored for `get`.
             reduced_dim: If set (the default, 28, matching
                 `wn-wd-entity-align`'s own build), embeddings are projected
                 down to this many dimensions via a truncated SVD fit on a
@@ -239,15 +261,18 @@ class VectorIndexEntitySource(EntitySource):
                 already give a representative sample. `None` (the
                 default) scans everything. Ignored if `reduced_dim` is
                 `None`.
-            batch_size: Entities encoded per `embedder.encode` call, and
-                (issue #68) the exact `batch_size` passed to `encode`
-                itself -- for `SentenceTransformer`, this is what actually
-                sizes each forward pass; leaving it unset instead defaults
-                to `SentenceTransformer`'s own hardcoded 32 regardless of
-                how many texts a call receives, confirmed (profiling a
-                real GPU) to cap throughput over 5x below what a real
-                batch size (512+) reaches -- the true bottleneck behind a
-                multi-day Wikidata-scale build, not CPU parallelism.
+            batch_size: Texts buffered per `embedder.encode` call (and per
+                FAISS add).
+            encode_batch_size: The `batch_size` passed to `embedder.encode`
+                itself -- for `SentenceTransformer`, what sizes each GPU
+                forward pass, and so the GPU memory a build holds. The
+                default of 32 keeps that to roughly the model's own weights
+                (LaBSE: ~1.9 GB reserved at 32 vs. ~6.4 GB at 4096) while
+                still embedding thousands of labels a second -- far faster
+                than streaming a Wikidata dump over the network supplies
+                them, which is the real bottleneck there. Raise it (e.g.
+                512) only when embedding is the bottleneck, such as
+                building from a local file (issue #68).
 
         Raises:
             OptionalDependencyError: If `faiss` isn't installed.
@@ -259,7 +284,7 @@ class VectorIndexEntitySource(EntitySource):
         except ImportError as exc:
             raise OptionalDependencyError("VectorIndexEntitySource", "vector-index") from exc
 
-        extract = resolve_field(field)
+        extract = _row_texts(field)
 
         vh: npt.NDArray[np.floating[Any]] | None = None
         if reduced_dim is not None:
@@ -276,14 +301,7 @@ class VectorIndexEntitySource(EntitySource):
                 entities, sample_size, extract, scan_limit=sample_scan_limit
             )
             if sample:
-                # `batch_size` is `Embedder.encode`'s own forward-pass chunk
-                # size (see its docstring) -- passed explicitly here too,
-                # not just below in `flush_batch`, since `sample_size`
-                # defaults to 100_000 and an embedder that (like
-                # `SentenceTransformer`) chunks internally would otherwise
-                # process this whole one-off call in its own default
-                # sub-batches of 32 rather than `batch_size`.
-                sample_vectors = np.asarray(embedder.encode(sample, batch_size=batch_size))
+                sample_vectors = np.asarray(embedder.encode(sample, batch_size=encode_batch_size))
                 _, _, vh_full = np.linalg.svd(sample_vectors, full_matrices=False)
                 # A too-small/low-rank sample (fewer distinct texts than
                 # reduced_dim) can't fit a projection of the requested size --
@@ -303,29 +321,31 @@ class VectorIndexEntitySource(EntitySource):
             ids_path.open("w", encoding="utf-8") as ids_file,
             dbm.open(str(entities_db_path), "n") as entities_db,
         ):
-            batch: list[Entity] = []
+            # One entry per index row: an entity contributes one row per text.
+            batch_ids: list[str] = []
             batch_texts: list[str] = []
 
             def flush_batch() -> None:
                 nonlocal index
-                if not batch:
+                if not batch_texts:
                     return
                 vectors = _project_and_normalize(
-                    np.asarray(embedder.encode(batch_texts, batch_size=batch_size)), vh
+                    np.asarray(embedder.encode(batch_texts, batch_size=encode_batch_size)), vh
                 )
                 if index is None:
                     index = faiss.IndexFlatIP(vectors.shape[1])
                 index.add(vectors)
-                for entity in batch:
-                    ids_file.write(f"{entity.id}\n")
-                    entities_db[entity.id] = _entity_to_json(entity)
+                for entity_id in batch_ids:
+                    ids_file.write(f"{entity_id}\n")
 
             for entity in entities:
-                batch.append(entity)
-                batch_texts.append(extract(entity))
-                if len(batch) >= batch_size:
+                entities_db[entity.id] = _entity_to_json(entity)
+                for text in extract(entity):
+                    batch_ids.append(entity.id)
+                    batch_texts.append(text)
+                if len(batch_texts) >= batch_size:
                     flush_batch()
-                    batch.clear()
+                    batch_ids.clear()
                     batch_texts.clear()
             flush_batch()
 
@@ -353,7 +373,8 @@ class VectorIndexEntitySource(EntitySource):
 
         Writes `index.faiss` (the FAISS index itself), `vh.bin` (the SVD
         projection matrix, only if one was used), `ids.txt` (+ a cached
-        `ids.txt.offsets.npy`, one entity id per line in index-row order),
+        `ids.txt.offsets.npy`, the entity id of each index row, one per line
+        in row order -- an id repeats once per label it was indexed under),
         `entities.db` (a `dbm` store, entity id -> JSON), and `meta.json`.
         """
         try:
@@ -414,27 +435,40 @@ class VectorIndexEntitySource(EntitySource):
         return self.search_batch([query], top_k)[0]
 
     def search_batch(self, queries: list[str], top_k: int = 10) -> list[list[Entity]]:
-        """Real batched search: one FAISS query for all of `queries` at once."""
+        """Real batched search: one FAISS query for all of `queries` at once.
+
+        Several index rows can map to the same entity (one per label), so
+        rows are deduplicated by entity -- each ranked by its best-matching
+        row -- and the search is retried with a doubled row count until
+        every query has `top_k` distinct entities or the index is exhausted.
+        """
         if not queries:
             return []
         vectors = _project_and_normalize(np.asarray(self._embedder.encode(queries)), self._vh)
-        _distances, indices = self._index.search(vectors, top_k)
+        total_rows = int(self._index.ntotal)
+        k = top_k
+        while True:
+            _distances, indices = self._index.search(vectors, min(k, total_rows) or top_k)
+            ranked_ids = [self._distinct_ids(row_indices, top_k) for row_indices in indices]
+            if k >= total_rows or all(len(ids) >= top_k for ids in ranked_ids):
+                break
+            k *= 2
         results = []
-        for row_indices in indices:
-            seen: set[str] = set()
-            hits = []
-            for row in row_indices:
-                if row < 0:
-                    continue
-                entity_id = self._id_at(int(row))
-                if entity_id in seen:
-                    continue
-                seen.add(entity_id)
-                entity = self.get(entity_id)
-                if entity is not None:
-                    hits.append(entity)
+        for ids in ranked_ids:
+            hits = [entity for entity_id in ids if (entity := self.get(entity_id)) is not None]
             results.append(hits)
         return results
+
+    def _distinct_ids(self, row_indices: npt.NDArray[np.int64], limit: int) -> list[str]:
+        """The first `limit` distinct entity ids among `row_indices`, in order."""
+        ids: dict[str, None] = {}
+        for row in row_indices:
+            if row < 0:
+                continue
+            ids.setdefault(self._id_at(int(row)), None)
+            if len(ids) >= limit:
+                break
+        return list(ids)
 
     def get(self, entity_id: str) -> Entity | None:
         """Look up an indexed entity by id, or `None` if it isn't in the index."""
