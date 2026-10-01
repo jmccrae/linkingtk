@@ -26,7 +26,7 @@ import logging
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from typing import Any
+from typing import Any, Literal
 
 from linkingtk.algorithms._llm_prompting import Task
 from linkingtk.algorithms.base import DEFAULT_BLOCKING, BaseLinker
@@ -39,7 +39,12 @@ from linkingtk.utils.graph import Graph
 
 logger = logging.getLogger("linkingtk")
 
-__all__ = ["KevClient", "KevError", "KevLinker"]
+__all__ = ["KevClient", "KevError", "KevLinker", "QuestionType"]
+
+QuestionType = Literal["noul", "choice"]
+
+# Kev rejects questions with more options than this (kev.serve's 422).
+_MAX_CHOICE_OPTIONS = 255
 
 _SERVER_HINT = (
     "start one with `uv run --extra serve python -m kev.serve --run jaredpalmer/kev-0.8b "
@@ -128,6 +133,31 @@ class KevClient:
         except (KeyError, TypeError, ValueError) as error:
             raise KevError(f"Malformed Kev response: {str(body)[:500]}") from error
 
+    def ask_choice(
+        self, state: str, instructions: str, options: dict[str, str]
+    ) -> dict[str, float]:
+        """Ask one multiple-choice question about `state`.
+
+        Args:
+            state: The document the question is asked about.
+            instructions: The question text.
+            options: Option name -> description (Kev renders each as
+                `name: description`). At most 255 options.
+
+        Returns:
+            Option name -> probability (summing to ~1 across options).
+        """
+        question = {"type": "choice", "instructions": instructions, "criteria": options}
+        body = self._post(
+            "/v1/systemone",
+            {"state": state, "model": self.model, "questions": {"q": question}},
+        )
+        try:
+            probabilities = body["answers"]["q"]["probabilities"]
+            return {name: float(probabilities[name]) for name in options}
+        except (KeyError, TypeError, ValueError) as error:
+            raise KevError(f"Malformed Kev response: {str(body)[:500]}") from error
+
     def health(self) -> None:
         """Send one trivial question, raising `KevError` if the server isn't usable."""
         self.ask_noul("ping", {"q": "Is this a test?"})
@@ -157,6 +187,14 @@ _QUESTIONS: dict[Task, str] = {
     "wsd": 'Is the word "{surface}" in the text used in this sense? {candidate}',
     "ea": "Is the entity described above the same as this entity? {candidate}",
     "wsa": "Does the sense described above mean the same as this sense? {candidate}",
+}
+
+
+_CHOICE_QUESTIONS: dict[Task, str] = {
+    "el": 'Which entity does the mention "{surface}" in the text refer to?',
+    "wsd": 'In which sense is the word "{surface}" used in the text?',
+    "ea": "Which entity is the same as the entity described above?",
+    "wsa": "Which sense means the same as the sense described above?",
 }
 
 
@@ -217,7 +255,7 @@ def _candidate_question(source: Entity, candidate: Entity, task: Task) -> str:
 
 
 class KevLinker(BaseLinker):
-    """Scores each blocked (source, candidate) pair with a Kev `noul` question.
+    """Scores blocked candidates with Kev `noul` (pairwise) or `choice` questions.
 
     Each source entity is lexicalized once as Kev's `state` (for EL/WSD:
     the mention's surface form and a word window of its context with the
@@ -229,6 +267,13 @@ class KevLinker(BaseLinker):
     candidate sees another -- while encoding the shared context once.
     Candidates are then ranked by P(yes).
 
+    With `question_type="choice"`, a source's candidates are instead the
+    options of a single multiple-choice question ("in which sense is the
+    word used?"), so Kev compares them directly and candidates are ranked
+    by the option probability. This is no longer pairwise: an absolute
+    "is this sense right?" judgment tends to accept several plausible
+    fine-grained senses, while a choice forces a relative decision.
+
     No `fit()`: Kev is used zero-shot.
 
     Args:
@@ -238,8 +283,12 @@ class KevLinker(BaseLinker):
             lexicalization and question wording.
         context_window: Words of mention context kept on each side of the
             span (EL/WSD only).
-        questions_per_request: Maximum candidates sent per request; a
-            source with more candidates is split across requests.
+        question_type: `"noul"` (one yes/no question per candidate) or
+            `"choice"` (one multiple-choice question over all candidates).
+        questions_per_request: `noul` only -- maximum candidates sent per
+            request; a source with more candidates is split across
+            requests. A `choice` question holds every candidate (up to
+            Kev's limit of 255 options; any beyond that score 0.0).
         matching: Strategy used to resolve scored candidates into final
             links.
 
@@ -255,6 +304,7 @@ class KevLinker(BaseLinker):
         client: KevClient,
         task: Task = "el",
         context_window: int = 50,
+        question_type: QuestionType = "noul",
         questions_per_request: int = 32,
         matching: Matcher = DEFAULT_MATCHER,
     ) -> None:
@@ -263,6 +313,7 @@ class KevLinker(BaseLinker):
         self.client = client
         self.task = task
         self.context_window = context_window
+        self.question_type = question_type
         self.questions_per_request = questions_per_request
         self.matching = matching
 
@@ -272,7 +323,11 @@ class KevLinker(BaseLinker):
         dataset2: list[Entity] | EntitySource,
         blocking: BlockingStrategy = DEFAULT_BLOCKING,
     ) -> dict[str, list[tuple[str, float]]]:
-        """P(yes) per blocked candidate: `{source_id: [(target_id, p_yes), ...]}`."""
+        """Kev's probability per blocked candidate: `{source_id: [(target_id, p), ...]}`.
+
+        `p` is P(yes) for `noul` questions, or the candidate's option
+        probability for `choice`.
+        """
         candidates: dict[str, list[Entity]] = defaultdict(list)
         sources: dict[str, Entity] = {}
         seen: set[tuple[str, str]] = set()
@@ -282,29 +337,55 @@ class KevLinker(BaseLinker):
                 seen.add((entity1.id, entity2.id))
                 candidates[entity1.id].append(entity2)
 
+        score = self._score_choice if self.question_type == "choice" else self._score_noul
+        return {
+            source_id: score(sources[source_id], source_candidates)
+            for source_id, source_candidates in candidates.items()
+        }
+
+    def _score_noul(self, source: Entity, candidates: list[Entity]) -> list[tuple[str, float]]:
+        state = _source_state(source, self.task, self.context_window)
         criteria = _TRUE_FALSE[self.task]
-        scores: dict[str, list[tuple[str, float]]] = {}
-        for source_id, source_candidates in candidates.items():
-            source = sources[source_id]
-            state = _source_state(source, self.task, self.context_window)
-            scored: list[tuple[str, float]] = []
-            for offset in range(0, len(source_candidates), self.questions_per_request):
-                chunk = source_candidates[offset : offset + self.questions_per_request]
-                questions = {
-                    f"c{index}": _candidate_question(source, candidate, self.task)
-                    for index, candidate in enumerate(chunk)
-                }
-                try:
-                    p_yes = self.client.ask_noul(state, questions, criteria)
-                except KevError as error:
-                    logger.warning("Kev request failed for %s: %s", source_id, error)
-                    p_yes = {}
-                scored.extend(
-                    (candidate.id, p_yes.get(f"c{index}", 0.0))
-                    for index, candidate in enumerate(chunk)
-                )
-            scores[source_id] = scored
-        return scores
+        scored: list[tuple[str, float]] = []
+        for offset in range(0, len(candidates), self.questions_per_request):
+            chunk = candidates[offset : offset + self.questions_per_request]
+            questions = {
+                f"c{index}": _candidate_question(source, candidate, self.task)
+                for index, candidate in enumerate(chunk)
+            }
+            try:
+                p_yes = self.client.ask_noul(state, questions, criteria)
+            except KevError as error:
+                logger.warning("Kev request failed for %s: %s", source.id, error)
+                p_yes = {}
+            scored.extend(
+                (candidate.id, p_yes.get(f"c{index}", 0.0)) for index, candidate in enumerate(chunk)
+            )
+        return scored
+
+    def _score_choice(self, source: Entity, candidates: list[Entity]) -> list[tuple[str, float]]:
+        if len(candidates) > _MAX_CHOICE_OPTIONS:
+            logger.warning(
+                "%s has %d candidates; only the first %d fit one Kev choice question",
+                source.id,
+                len(candidates),
+                _MAX_CHOICE_OPTIONS,
+            )
+        options = {
+            f"option {index + 1}": _describe(candidate)
+            for index, candidate in enumerate(candidates[:_MAX_CHOICE_OPTIONS])
+        }
+        state = _source_state(source, self.task, self.context_window)
+        instructions = _CHOICE_QUESTIONS[self.task].format(surface=_mention_surface(source))
+        try:
+            probabilities = self.client.ask_choice(state, instructions, options)
+        except KevError as error:
+            logger.warning("Kev request failed for %s: %s", source.id, error)
+            probabilities = {}
+        return [
+            (candidate.id, probabilities.get(f"option {index + 1}", 0.0))
+            for index, candidate in enumerate(candidates)
+        ]
 
     def link(
         self,

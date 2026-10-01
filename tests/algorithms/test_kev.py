@@ -46,6 +46,17 @@ class _FakeKevClient(KevClient):
             for qid, text in questions.items()
         }
 
+    def ask_choice(
+        self, state: str, instructions: str, options: dict[str, str]
+    ) -> dict[str, float]:
+        self.calls.append({"state": state, "instructions": instructions, "options": options})
+        if self.fail:
+            raise KevError("boom")
+        return {
+            name: next((p for kw, p in self.p_yes_by_keyword.items() if kw in desc), 0.0)
+            for name, desc in options.items()
+        }
+
 
 def _mention(text: str, surface: str, id: str = "m1", lemma: str | None = None) -> Entity:
     start = text.index(surface)
@@ -111,6 +122,31 @@ class TestKevLinker:
 
         assert scores == {"m1": [("Paris", 0.0)]}
 
+    def test_choice_asks_one_question_over_all_candidates(self) -> None:
+        mention = _mention("a bass guitar", "bass")
+        kb = [Entity(id=f"e{i}", labels=["bass"], description=f"sense {i}") for i in range(5)]
+        client = _FakeKevClient({"sense 3": 0.7, "sense 1": 0.2})
+
+        linker = KevLinker(client, task="wsd", question_type="choice", questions_per_request=2)
+        [result] = linker.link([mention], kb, blocking=_AllPairs())
+
+        [call] = client.calls
+        assert 'word "bass"' in call["instructions"]
+        assert call["options"]["option 4"] == "bass: sense 3"
+        assert len(call["options"]) == 5
+        assert result.target_id == "e3"
+        assert result.alternatives[0] == "e1"
+
+    def test_choice_failure_scores_zero(self) -> None:
+        mention = _mention("He moved to Paris.", "Paris")
+        kb = [Entity(id="Paris", labels=["Paris"])]
+
+        linker = KevLinker(_FakeKevClient({}, fail=True), question_type="choice")
+
+        assert linker.score_candidates([mention], kb, blocking=_AllPairs()) == {
+            "m1": [("Paris", 0.0)]
+        }
+
     def test_rejects_non_positive_chunk_size(self) -> None:
         with pytest.raises(ValueError):
             KevLinker(_FakeKevClient({}), questions_per_request=0)
@@ -142,7 +178,12 @@ class _StubHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"detail": "invalid"}')
             return
-        answers = {qid: {"type": "noul", "noul": 0.25} for qid in body["questions"]}
+        answers = {
+            qid: {"type": "choice", "probabilities": {"a": 0.6, "b": 0.4}}
+            if q["type"] == "choice"
+            else {"type": "noul", "noul": 0.25}
+            for qid, q in body["questions"].items()
+        }
         payload = json.dumps({"answers": answers, "usage": {}, "latency_ms": 1}).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
@@ -183,6 +224,19 @@ class TestKevClient:
                     "criteria": {"true": "yes", "false": "no"},
                 }
             },
+        }
+
+    def test_choice_request_and_response(self, stub_server: str) -> None:
+        p = KevClient(stub_server).ask_choice("text", "Which?", {"a": "first", "b": "second"})
+
+        assert p == {"a": 0.6, "b": 0.4}
+        [request] = _StubHandler.requests
+        assert request["body"]["questions"] == {
+            "q": {
+                "type": "choice",
+                "instructions": "Which?",
+                "criteria": {"a": "first", "b": "second"},
+            }
         }
 
     def test_http_error_raises_kev_error(self, stub_server: str) -> None:

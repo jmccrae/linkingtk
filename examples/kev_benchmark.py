@@ -13,8 +13,9 @@ benchmarks so numbers are comparable:
   (same as `comparative_benchmark.py`/`refined_benchmark.py`). Baseline:
   `StringSimilarityLinker` (the comparative harness's MVP tier).
 - WSD: SemEval-2007 via `UfsacDataset` against a real `WnEntitySource`,
-  with `ExactMatch(top_k=50)` blocking (same as `llm_benchmark.py`).
-  Baseline: most-frequent sense, i.e. the first WordNet candidate.
+  with `ExactMatch(top_k=50)` blocking (same as `llm_benchmark.py`),
+  filtered to the mention's own part of speech. Baseline: most-frequent
+  sense, i.e. the first WordNet candidate of that POS.
 
 Both are subsampled to `--max-mentions` sources (seeded; `0` = all).
 Besides P@1/F1 and Hits@k/MRR, each task reports its blocking recall
@@ -30,9 +31,10 @@ from __future__ import annotations
 import argparse
 import random
 import statistics
+from functools import partial
 from pathlib import Path
 
-from linkingtk.algorithms.kev import KevClient, KevLinker
+from linkingtk.algorithms.kev import KevClient, KevLinker, QuestionType
 from linkingtk.algorithms.string_similarity import StringSimilarityLinker
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
@@ -48,6 +50,32 @@ from linkingtk.matchers import GreedyMatcher
 
 _SEED = 20260827
 _TOP_K = [1, 5]
+
+# Penn Treebank tag prefix -> WordNet synset-id POS suffixes (adjectives
+# include satellites, "-s").
+_PENN_TO_WN = {"NN": ("n",), "VB": ("v",), "JJ": ("a", "s"), "RB": ("r",)}
+
+
+class _SamePos(BlockingStrategy):
+    """Drops WordNet candidates whose POS doesn't match the mention's Penn tag.
+
+    `WnEntitySource.search` looks lemmas up across every POS, so without
+    this a verb mention like "play" gets the noun senses first, and the
+    "first candidate" baseline is not the most frequent sense of the right
+    POS. Mentions without a `pos` property keep all their candidates.
+    """
+
+    def __init__(self, inner: BlockingStrategy) -> None:
+        self.inner = inner
+
+    def candidate_pairs(
+        self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
+    ) -> list[tuple[Entity, Entity]]:
+        def keep(mention: Entity, synset: Entity) -> bool:
+            suffixes = _PENN_TO_WN.get(mention.properties.get("pos", "")[:2])
+            return suffixes is None or synset.id.rsplit("-", 1)[-1] in suffixes
+
+        return [(m, s) for m, s in self.inner.candidate_pairs(dataset1, dataset2) if keep(m, s)]
 
 
 def _sample(
@@ -116,7 +144,9 @@ def _diagnostics(
     print(f"[{name}] P(yes) non-gold: {quantiles(other_p)}")
 
 
-def el_runs(client: KevClient, label: str, max_mentions: int | None) -> list[BenchmarkRun]:
+def el_runs(
+    client: KevClient, label: str, question_types: list[QuestionType], max_mentions: int | None
+) -> list[BenchmarkRun]:
     dataset = AidaConllDataset()
     mentions, kb, _ = dataset.load()
     _train, test_pairs, _val = dataset.load_splits()
@@ -130,23 +160,37 @@ def el_runs(client: KevClient, label: str, max_mentions: int | None) -> list[Ben
         scores = {r.source_id: [(r.target_id, 1.0)] for r in results}
         return _report_from_scores(scores, ground_truth)
 
-    def kev() -> EvaluationReport:
-        scores = KevLinker(client, task="el").score_candidates(mentions, test_kb, blocking)
-        _diagnostics("EL", mentions, test_kb, blocking, ground_truth, scores)
+    def kev(question_type: QuestionType) -> EvaluationReport:
+        linker = KevLinker(client, task="el", question_type=question_type)
+        scores = linker.score_candidates(mentions, test_kb, blocking)
+        _diagnostics(f"EL/{question_type}", mentions, test_kb, blocking, ground_truth, scores)
         return _report_from_scores(scores, ground_truth)
 
     return [
         BenchmarkRun("EL", "MVP", "StringSimilarityLinker", "AIDA-CoNLL test", baseline),
-        BenchmarkRun("EL", "Decision model", f"KevLinker ({label})", "AIDA-CoNLL test", kev),
+        *(
+            BenchmarkRun(
+                "EL",
+                "Decision model",
+                f"KevLinker ({label}, {qt})",
+                "AIDA-CoNLL test",
+                partial(kev, qt),
+            )
+            for qt in question_types
+        ),
     ]
 
 
 def wsd_runs(
-    client: KevClient, label: str, ufsac_path: Path, max_mentions: int | None
+    client: KevClient,
+    label: str,
+    question_types: list[QuestionType],
+    ufsac_path: Path,
+    max_mentions: int | None,
 ) -> list[BenchmarkRun]:
     mentions, senses, ground_truth = UfsacDataset(source=str(ufsac_path)).load()
     mentions, ground_truth = _sample(mentions, ground_truth, max_mentions)
-    blocking = ExactMatch(top_k=50)
+    blocking = _SamePos(ExactMatch(top_k=50))
 
     def baseline() -> EvaluationReport:
         # WordNet lists senses most-frequent first; decreasing scores keep that order.
@@ -156,14 +200,24 @@ def wsd_runs(
             ranked.append((e2.id, -float(len(ranked))))
         return _report_from_scores(scores, ground_truth)
 
-    def kev() -> EvaluationReport:
-        scores = KevLinker(client, task="wsd").score_candidates(mentions, senses, blocking)
-        _diagnostics("WSD", mentions, senses, blocking, ground_truth, scores)
+    def kev(question_type: QuestionType) -> EvaluationReport:
+        linker = KevLinker(client, task="wsd", question_type=question_type)
+        scores = linker.score_candidates(mentions, senses, blocking)
+        _diagnostics(f"WSD/{question_type}", mentions, senses, blocking, ground_truth, scores)
         return _report_from_scores(scores, ground_truth)
 
     return [
         BenchmarkRun("WSD", "MVP", "Most frequent sense", "SemEval-2007", baseline),
-        BenchmarkRun("WSD", "Decision model", f"KevLinker ({label})", "SemEval-2007", kev),
+        *(
+            BenchmarkRun(
+                "WSD",
+                "Decision model",
+                f"KevLinker ({label}, {qt})",
+                "SemEval-2007",
+                partial(kev, qt),
+            )
+            for qt in question_types
+        ),
     ]
 
 
@@ -172,6 +226,13 @@ def main() -> None:
     parser.add_argument("--task", choices=["el", "wsd", "both"], default="both")
     parser.add_argument("--kev-url", default="http://127.0.0.1:8008")
     parser.add_argument("--label", default="kev")
+    parser.add_argument(
+        "--question-types",
+        nargs="+",
+        choices=["noul", "choice"],
+        default=["noul", "choice"],
+        help="KevLinker question types to run, one result row each",
+    )
     parser.add_argument("--max-mentions", type=int, default=200)
     parser.add_argument(
         "--ufsac-path",
@@ -186,9 +247,9 @@ def main() -> None:
 
     runs: list[BenchmarkRun] = []
     if args.task in ("el", "both"):
-        runs += el_runs(client, args.label, max_mentions)
+        runs += el_runs(client, args.label, args.question_types, max_mentions)
     if args.task in ("wsd", "both"):
-        runs += wsd_runs(client, args.label, args.ufsac_path, max_mentions)
+        runs += wsd_runs(client, args.label, args.question_types, args.ufsac_path, max_mentions)
     print("\n" + format_table(run_benchmarks(runs)))
 
 
