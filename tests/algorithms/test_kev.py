@@ -116,11 +116,11 @@ class TestKevLinker:
         mention = _mention("He moved to Paris.", "Paris")
         kb = [Entity(id="Paris", labels=["Paris"])]
 
-        scores = KevLinker(_FakeKevClient({}, fail=True)).score_candidates(
-            [mention], kb, blocking=_AllPairs()
-        )
+        linker = KevLinker(_FakeKevClient({}, fail=True))
+        scores = linker.score_candidates([mention], kb, blocking=_AllPairs())
 
         assert scores == {"m1": [("Paris", 0.0)]}
+        assert (linker.failed_requests, linker.total_requests) == (1, 1)
 
     def test_choice_asks_one_question_over_all_candidates(self) -> None:
         mention = _mention("a bass guitar", "bass")

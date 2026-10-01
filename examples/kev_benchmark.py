@@ -112,6 +112,15 @@ def _report_from_scores(
     return EvaluationReport(metrics=metrics)
 
 
+def _require_no_failures(linker: KevLinker) -> None:
+    """Abort rather than report metrics where failed requests silently scored 0.0."""
+    if linker.failed_requests:
+        raise SystemExit(
+            f"{linker.failed_requests}/{linker.total_requests} Kev requests failed "
+            "(see the server log, e.g. out of GPU memory); results would be invalid"
+        )
+
+
 def _diagnostics(
     name: str,
     mentions: list[Entity],
@@ -163,6 +172,7 @@ def el_runs(
     def kev(question_type: QuestionType) -> EvaluationReport:
         linker = KevLinker(client, task="el", question_type=question_type)
         scores = linker.score_candidates(mentions, test_kb, blocking)
+        _require_no_failures(linker)
         _diagnostics(f"EL/{question_type}", mentions, test_kb, blocking, ground_truth, scores)
         return _report_from_scores(scores, ground_truth)
 
@@ -203,6 +213,7 @@ def wsd_runs(
     def kev(question_type: QuestionType) -> EvaluationReport:
         linker = KevLinker(client, task="wsd", question_type=question_type)
         scores = linker.score_candidates(mentions, senses, blocking)
+        _require_no_failures(linker)
         _diagnostics(f"WSD/{question_type}", mentions, senses, blocking, ground_truth, scores)
         return _report_from_scores(scores, ground_truth)
 

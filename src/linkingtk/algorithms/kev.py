@@ -296,7 +296,11 @@ class KevLinker(BaseLinker):
         `graph` is accepted for interface compliance but not used. A
         failed request is logged and its candidates scored 0.0 rather than
         aborting the whole run, the same policy as
-        [LlmBaseLinker][linkingtk.algorithms.llm.LlmBaseLinker].
+        [LlmBaseLinker][linkingtk.algorithms.llm.LlmBaseLinker]. Check
+        `failed_requests` (out of `total_requests`, both reset per
+        `score_candidates`/`link` call) before trusting a benchmark's
+        numbers -- e.g. a server running out of GPU memory answers HTTP
+        500 for some requests while still serving the rest.
     """
 
     def __init__(
@@ -316,6 +320,8 @@ class KevLinker(BaseLinker):
         self.question_type = question_type
         self.questions_per_request = questions_per_request
         self.matching = matching
+        self.failed_requests = 0
+        self.total_requests = 0
 
     def score_candidates(
         self,
@@ -337,11 +343,20 @@ class KevLinker(BaseLinker):
                 seen.add((entity1.id, entity2.id))
                 candidates[entity1.id].append(entity2)
 
+        self.failed_requests = 0
+        self.total_requests = 0
         score = self._score_choice if self.question_type == "choice" else self._score_noul
-        return {
+        scores = {
             source_id: score(sources[source_id], source_candidates)
             for source_id, source_candidates in candidates.items()
         }
+        if self.failed_requests:
+            logger.warning(
+                "%d of %d Kev requests failed; their candidates were scored 0.0",
+                self.failed_requests,
+                self.total_requests,
+            )
+        return scores
 
     def _score_noul(self, source: Entity, candidates: list[Entity]) -> list[tuple[str, float]]:
         state = _source_state(source, self.task, self.context_window)
@@ -353,9 +368,11 @@ class KevLinker(BaseLinker):
                 f"c{index}": _candidate_question(source, candidate, self.task)
                 for index, candidate in enumerate(chunk)
             }
+            self.total_requests += 1
             try:
                 p_yes = self.client.ask_noul(state, questions, criteria)
             except KevError as error:
+                self.failed_requests += 1
                 logger.warning("Kev request failed for %s: %s", source.id, error)
                 p_yes = {}
             scored.extend(
@@ -377,9 +394,11 @@ class KevLinker(BaseLinker):
         }
         state = _source_state(source, self.task, self.context_window)
         instructions = _CHOICE_QUESTIONS[self.task].format(surface=_mention_surface(source))
+        self.total_requests += 1
         try:
             probabilities = self.client.ask_choice(state, instructions, options)
         except KevError as error:
+            self.failed_requests += 1
             logger.warning("Kev request failed for %s: %s", source.id, error)
             probabilities = {}
         return [
