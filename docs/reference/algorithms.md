@@ -20,6 +20,10 @@
 
 ::: linkingtk.algorithms.llm_reranker
 
+## Kev decision-model linker
+
+::: linkingtk.algorithms.kev
+
 ## Entity Alignment
 
 ::: linkingtk.algorithms.ea
