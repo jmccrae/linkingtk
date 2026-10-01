@@ -414,6 +414,10 @@ class _FakeIndexFlatIP:
         self.dim = dim
         self.vectors: list[np.ndarray] = []
 
+    @property
+    def ntotal(self) -> int:
+        return len(self.vectors)
+
     def add(self, vectors: np.ndarray) -> None:
         self.vectors.extend(vectors)
 

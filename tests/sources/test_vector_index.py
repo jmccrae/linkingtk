@@ -57,6 +57,10 @@ class _FakeIndexFlatIP:
         self.dim = dim
         self.vectors: list[np.ndarray] = []
 
+    @property
+    def ntotal(self) -> int:
+        return len(self.vectors)
+
     def add(self, vectors: np.ndarray) -> None:
         self.vectors.extend(vectors)
 
@@ -181,18 +185,24 @@ class TestBuildAndSearch:
         assert {e.id for e in source.search("Paris", top_k=3)} >= {"Q1", "Q2"}
         assert source.get("Q3") is not None
 
-    def test_batch_size_is_forwarded_to_embedder_encode(self, tmp_path: Path) -> None:
+    def test_encode_batch_size_is_forwarded_to_embedder_encode(self, tmp_path: Path) -> None:
         embedder = _RecordingEmbedder()
 
         VectorIndexEntitySource.build(
-            _ENTITIES, embedder, tmp_path / "idx", reduced_dim=2, sample_size=2, batch_size=2
+            _ENTITIES,
+            embedder,
+            tmp_path / "idx",
+            reduced_dim=2,
+            sample_size=2,
+            batch_size=2,
+            encode_batch_size=7,
         )
 
         # One call fitting the SVD sample, one+ flushing entities -- every
-        # one of them must carry the caller's own batch_size (2), not
-        # whatever the embedder's own encode() defaults to.
+        # one of them must carry the caller's own encode_batch_size (7), not
+        # batch_size or whatever the embedder's own encode() defaults to.
         assert embedder.batch_sizes
-        assert all(size == 2 for size in embedder.batch_sizes)
+        assert all(size == 7 for size in embedder.batch_sizes)
 
 
 class _ReiterableEntities:
@@ -252,7 +262,9 @@ _MANY_ENTITIES = [Entity(id=f"Q{i}", labels=[f"label{i}"]) for i in range(100)]
 
 class TestSampleScanLimit:
     def test_reservoir_only_draws_from_prefix(self) -> None:
-        sample = _reservoir_sample_texts(_MANY_ENTITIES, k=5, extract=lambda e: e.id, scan_limit=10)
+        sample = _reservoir_sample_texts(
+            _MANY_ENTITIES, k=5, extract=lambda e: [e.id], scan_limit=10
+        )
 
         assert len(sample) == 5
         assert set(sample) <= {f"Q{i}" for i in range(10)}
@@ -260,7 +272,7 @@ class TestSampleScanLimit:
     def test_reservoir_without_limit_scans_everything(self) -> None:
         source = _CountingEntities(_MANY_ENTITIES)
 
-        _reservoir_sample_texts(source, k=5, extract=lambda e: e.id)
+        _reservoir_sample_texts(source, k=5, extract=lambda e: [e.id])
 
         assert source.consumed == [100]
 
@@ -278,6 +290,63 @@ class TestSampleScanLimit:
 
         assert source.consumed == [10, 100]
         assert index.get("Q99") is not None
+
+
+class TestPerLabelRows:
+    def test_each_label_gets_its_own_row(self, tmp_path: Path) -> None:
+        entities = [
+            Entity(id="Q27", labels=["Eire", "Poblacht na hEireann"]),
+            Entity(id="Q2", labels=["Eire"]),
+            Entity(id="Q3", labels=["Sasana"]),
+        ]
+
+        source = VectorIndexEntitySource.build(
+            entities, _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+
+        ids = (tmp_path / "idx" / "ids.txt").read_text().split()
+        assert ids == ["Q27", "Q27", "Q2", "Q3"]
+        # An exact match on one label isn't diluted by the entity's others:
+        # both entities labelled "Eire" score a perfect match.
+        assert {e.id for e in source.search("Eire", top_k=2)} == {"Q27", "Q2"}
+
+    def test_duplicate_and_empty_labels_are_skipped(self, tmp_path: Path) -> None:
+        entities = [
+            Entity(id="Q1", labels=["Paris", ("Paris", "fr"), ""]),
+            Entity(id="Q2", labels=[]),
+        ]
+
+        source = VectorIndexEntitySource.build(
+            entities, _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+
+        assert (tmp_path / "idx" / "ids.txt").read_text().split() == ["Q1"]
+        # No rows, so never a search hit -- but still stored for get().
+        assert source.get("Q2") is not None
+
+    def test_search_returns_top_k_distinct_entities(self, tmp_path: Path) -> None:
+        # Q1's many near-identical labels would fill a plain top-3 row
+        # search on their own; search must keep looking past them.
+        entities = [
+            Entity(id="Q1", labels=["aaab", "aaac", "aaad", "aaae"]),
+            Entity(id="Q2", labels=["aaaf"]),
+            Entity(id="Q3", labels=["aaag"]),
+        ]
+
+        source = VectorIndexEntitySource.build(
+            entities, _FakeEmbedder(), tmp_path / "idx", reduced_dim=None
+        )
+
+        hits = source.search("aaab", top_k=3)
+        assert hits[0].id == "Q1"
+        assert sorted(e.id for e in hits) == ["Q1", "Q2", "Q3"]
+
+    def test_non_label_field_keeps_one_row_per_entity(self, tmp_path: Path) -> None:
+        VectorIndexEntitySource.build(
+            _ENTITIES, _FakeEmbedder(), tmp_path / "idx", field="description", reduced_dim=None
+        )
+
+        assert (tmp_path / "idx" / "ids.txt").read_text().split() == ["Q1", "Q2", "Q3"]
 
 
 class TestGet:
