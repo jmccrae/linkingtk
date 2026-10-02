@@ -9,7 +9,13 @@ from typing import Any
 
 import pytest
 
-from linkingtk.algorithms.kev import KevClient, KevError, KevLinker, _windowed_context
+from linkingtk.algorithms.kev import (
+    KevClient,
+    KevError,
+    KevLinker,
+    _windowed_context,
+    kev_choice_records,
+)
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.core.entity import Entity
 
@@ -152,6 +158,59 @@ class TestKevLinker:
             KevLinker(_FakeKevClient({}), questions_per_request=0)
 
 
+class TestKevChoiceRecords:
+    def test_record_matches_linker_request_and_labels_gold(self) -> None:
+        mention = _mention("a bass guitar", "bass")
+        kb = [Entity(id=f"e{i}", labels=["bass"], description=f"sense {i}") for i in range(3)]
+        client = _FakeKevClient({})
+        KevLinker(client, task="wsd", question_type="choice").link(
+            [mention], kb, blocking=_AllPairs()
+        )
+
+        [record] = kev_choice_records(
+            [mention], kb, [("m1", "e2")], blocking=_AllPairs(), task="wsd"
+        )
+
+        [call] = client.calls
+        question = record["questions"]["q"]
+        assert record["state"] == call["state"]
+        assert question["instructions"] == call["instructions"]
+        assert question["criteria"] == call["options"]
+        assert question["type"] == "choice"
+        assert question["label"] == "option 3"
+
+    def test_skips_missing_gold_and_single_candidate(self) -> None:
+        m1 = _mention("a bass guitar", "bass", id="m1")
+        m2 = _mention("a crane flew", "crane", id="m2")
+        kb = [
+            Entity(id="b1", labels=["bass"]),
+            Entity(id="b2", labels=["bass"]),
+            Entity(id="c1", labels=["crane"]),
+        ]
+
+        class _ByLabel(BlockingStrategy):
+            def candidate_pairs(
+                self, dataset1: list[Entity], dataset2: list[Entity]
+            ) -> list[tuple[Entity, Entity]]:
+                return [(a, b) for a in dataset1 for b in dataset2 if a.labels == b.labels]
+
+        records = kev_choice_records(
+            [m1, m2], kb, [("m1", "nope"), ("m2", "c1")], blocking=_ByLabel(), task="wsd"
+        )
+
+        assert records == []
+
+    def test_first_gold_in_candidate_order_is_label(self) -> None:
+        mention = _mention("a bass guitar", "bass")
+        kb = [Entity(id=f"e{i}", labels=["bass"]) for i in range(3)]
+
+        [record] = kev_choice_records(
+            [mention], kb, [("m1", "e2"), ("m1", "e1")], blocking=_AllPairs(), task="wsd"
+        )
+
+        assert record["questions"]["q"]["label"] == "option 2"
+
+
 class TestWindowedContext:
     def test_trims_to_window_and_brackets_span(self) -> None:
         text = "one two three four five TARGET six seven eight nine ten"
@@ -167,6 +226,13 @@ class TestWindowedContext:
 
 class _StubHandler(BaseHTTPRequestHandler):
     requests: list[dict[str, Any]] = []
+
+    def do_GET(self) -> None:  # noqa: N802 -- BaseHTTPRequestHandler's API
+        payload = json.dumps({"models": [{"name": "kev-latest", "run": "runs/x"}]}).encode()
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(payload)
 
     def do_POST(self) -> None:  # noqa: N802 -- BaseHTTPRequestHandler's API
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
@@ -238,6 +304,9 @@ class TestKevClient:
                 "criteria": {"a": "first", "b": "second"},
             }
         }
+
+    def test_models_lists_served_run(self, stub_server: str) -> None:
+        assert KevClient(stub_server).models() == [{"name": "kev-latest", "run": "runs/x"}]
 
     def test_http_error_raises_kev_error(self, stub_server: str) -> None:
         with pytest.raises(KevError, match="422"):

@@ -39,6 +39,7 @@ from linkingtk.algorithms.string_similarity import StringSimilarityLinker
 from linkingtk.blocking.base import BlockingStrategy
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.blocking.label_overlap import LabelOverlap
+from linkingtk.blocking.pos import WordNetPosFilter
 from linkingtk.core.entity import Entity
 from linkingtk.core.source import EntitySource
 from linkingtk.datasets.aida_conll import AidaConllDataset
@@ -50,32 +51,14 @@ from linkingtk.matchers import GreedyMatcher
 
 _SEED = 20260827
 _TOP_K = [1, 5]
-
-# Penn Treebank tag prefix -> WordNet synset-id POS suffixes (adjectives
-# include satellites, "-s").
-_PENN_TO_WN = {"NN": ("n",), "VB": ("v",), "JJ": ("a", "s"), "RB": ("r",)}
-
-
-class _SamePos(BlockingStrategy):
-    """Drops WordNet candidates whose POS doesn't match the mention's Penn tag.
-
-    `WnEntitySource.search` looks lemmas up across every POS, so without
-    this a verb mention like "play" gets the noun senses first, and the
-    "first candidate" baseline is not the most frequent sense of the right
-    POS. Mentions without a `pos` property keep all their candidates.
-    """
-
-    def __init__(self, inner: BlockingStrategy) -> None:
-        self.inner = inner
-
-    def candidate_pairs(
-        self, dataset1: list[Entity], dataset2: list[Entity] | EntitySource
-    ) -> list[tuple[Entity, Entity]]:
-        def keep(mention: Entity, synset: Entity) -> bool:
-            suffixes = _PENN_TO_WN.get(mention.properties.get("pos", "")[:2])
-            return suffixes is None or synset.id.rsplit("-", 1)[-1] in suffixes
-
-        return [(m, s) for m, s in self.inner.candidate_pairs(dataset1, dataset2) if keep(m, s)]
+_RAGANATO_NAMES = {
+    "raganato_semeval2007": "SemEval-2007",
+    "raganato_senseval2": "Senseval-2",
+    "raganato_senseval3": "Senseval-3",
+    "raganato_semeval2013": "SemEval-2013",
+    "raganato_semeval2015": "SemEval-2015",
+    "raganato_ALL": "ALL",
+}
 
 
 def _sample(
@@ -200,7 +183,8 @@ def wsd_runs(
 ) -> list[BenchmarkRun]:
     mentions, senses, ground_truth = UfsacDataset(source=str(ufsac_path)).load()
     mentions, ground_truth = _sample(mentions, ground_truth, max_mentions)
-    blocking = _SamePos(ExactMatch(top_k=50))
+    blocking = WordNetPosFilter(ExactMatch(top_k=50))
+    dataset_name = _RAGANATO_NAMES.get(ufsac_path.stem.removesuffix(".xml"), ufsac_path.stem)
 
     def baseline() -> EvaluationReport:
         # WordNet lists senses most-frequent first; decreasing scores keep that order.
@@ -218,13 +202,13 @@ def wsd_runs(
         return _report_from_scores(scores, ground_truth)
 
     return [
-        BenchmarkRun("WSD", "MVP", "Most frequent sense", "SemEval-2007", baseline),
+        BenchmarkRun("WSD", "MVP", "Most frequent sense", dataset_name, baseline),
         *(
             BenchmarkRun(
                 "WSD",
                 "Decision model",
                 f"KevLinker ({label}, {qt})",
-                "SemEval-2007",
+                dataset_name,
                 partial(kev, qt),
             )
             for qt in question_types
@@ -255,6 +239,12 @@ def main() -> None:
 
     client = KevClient(args.kev_url)
     client.health()
+    # Print what is actually being served: a port collision once pointed a
+    # run at a different service entirely.
+    for model in client.models():
+        print(
+            f"Kev server at {args.kev_url} serves run={model.get('run')} base={model.get('base')}"
+        )
 
     runs: list[BenchmarkRun] = []
     if args.task in ("el", "both"):

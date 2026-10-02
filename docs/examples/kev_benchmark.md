@@ -140,5 +140,76 @@ a verb mention like "play" gets its noun senses first. The first-candidate
 SemEval-2007, far below the usual ~0.54 for that split. Filtering
 candidates by the mention's Penn Treebank tag (UFSAC provides it as
 `properties["pos"]`) gives **0.536**, in line with the expected value.
-The benchmark script does this with a small `_SamePos` blocking wrapper.
-The other WSD benchmarks in this repo don't filter by POS.
+The benchmark script does this with the
+[`WordNetPosFilter`][linkingtk.blocking.pos.WordNetPosFilter] blocking wrapper.
+`examples/esc_reproduction.py` applies the same filter (its own
+`_PosRestrictedMatch`); the GlossBERT and LLM WSD benchmarks don't.
+
+## Fine-tuning Kev-4B on SemCor
+
+Kev is trainable: `kev.train` fits its LoRA adapter and pointer head on
+labelled requests. `examples/kev_finetune_wsd.py` exports SemCor as
+training data with
+[`kev_choice_records`][linkingtk.algorithms.kev.kev_choice_records]. That
+builds exactly the state, instructions and options
+`KevLinker(question_type="choice")` sends at inference, plus the gold
+option as the label.
+
+```python
+--8<-- "examples/kev_finetune_wsd.py"
+```
+
+**Setup:**
+- **Data:** a seeded sample of 20,000 SemCor instances (about 9% of
+  SemCor), with 1,000 more held out. Monosemous instances are skipped.
+- **Candidates:** same-POS WordNet senses, as in the benchmark above.
+- **Training:** one epoch from the released `jaredpalmer/kev-4b`
+  (`--init_from`), lr `2e-5`, bf16 weights with gradient checkpointing.
+  It took 56 minutes on the RTX 4090, with a 9.6 GB peak.
+- **No leakage from Kev's own training:** its base set (`decision-v7`)
+  contains no WSD data, and the Raganato test sets are never used for
+  training.
+
+**Training options are shuffled.** WordNet lists senses by SemCor
+frequency, so in WordNet order the gold sense is option 1 for 65% of
+SemCor records. Fine-tuning on that order could teach "pick option 1"
+rather than reading the glosses. The export shuffles each training
+record's options (gold is then option 1 in 22% of records); inference
+keeps WordNet order.
+
+### Results
+
+All 7,253 ALL instances; SemEval-2007 is the 455-instance subset that
+most systems use as their dev set.
+
+```text
+System                                 Training                  SE07   ALL
+Most frequent sense                    -                         53.6   61.6
+GlossBERT (our reproduction)           all SemCor                72.5   76.7
+EWISER (SemCor)                        all SemCor                68.8   76.9
+Kev-4B, choice, zero-shot              none                      68.4   77.7
+EWISER (SemCor + tagged glosses + WN)  SemCor + WordNet          74.5   79.7
+ESC (our reproduction)                 all SemCor                76.3   80.6
+Kev-4B, choice, fine-tuned             20k SemCor, 1 epoch       75.2   81.6
+```
+
+All rows use this repo's UFSAC pipeline. ESC's reproduction script
+filters candidates by POS the same way.
+
+Other checks:
+- **Held-out SemCor** (Kev's own `kev.benchmark`): accuracy went from
+  0.653 to 0.714, and calibration error from 0.056 to 0.032. Most frequent
+  sense scores 0.654 on those records.
+- **Option order no longer matters:** ALL scores 0.816 in WordNet order,
+  0.823 reversed and 0.820 shuffled. Before fine-tuning, reversing cost
+  4 points on SemEval-2007.
+
+Caveats:
+- **Uncalibrated probabilities.** The fine-tuned checkpoint serves at
+  temperature 1.0; `kev.train` doesn't refit Kev's calibration
+  temperature. Rankings and precision@1 are unaffected, but refit it
+  (Kev's `scripts/calibrate_checkpoint.py`) before thresholding on its
+  probabilities.
+- **Possible pretraining exposure.** The Qwen base was pretrained on web
+  data that may include the Raganato test sets. That caveat applies to
+  any LLM-based WSD number, and isn't something this setup can rule out.
