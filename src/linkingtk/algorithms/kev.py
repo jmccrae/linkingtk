@@ -82,14 +82,14 @@ class KevClient:
         self.timeout = timeout
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request(path, json.dumps(payload).encode("utf-8"), "POST")
+
+    def _request(self, path: str, data: bytes | None, method: str) -> dict[str, Any]:
         headers = {"content-type": "application/json"}
         if self.api_key is not None:
             headers["authorization"] = f"Bearer {self.api_key}"
         request = urllib.request.Request(
-            self.base_url + path,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
+            self.base_url + path, data=data, headers=headers, method=method
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
@@ -156,6 +156,16 @@ class KevClient:
             probabilities = body["answers"]["q"]["probabilities"]
             return {name: float(probabilities[name]) for name in options}
         except (KeyError, TypeError, ValueError) as error:
+            raise KevError(f"Malformed Kev response: {str(body)[:500]}") from error
+
+    def models(self) -> list[dict[str, Any]]:
+        """The server's `/v1/models` listing; each entry's `run` names the
+        checkpoint actually being served (e.g. `jaredpalmer/kev-4b`)."""
+        body = self._request("/v1/models", None, "GET")
+        try:
+            models: list[dict[str, Any]] = body["models"]
+            return models
+        except (KeyError, TypeError) as error:
             raise KevError(f"Malformed Kev response: {str(body)[:500]}") from error
 
     def health(self) -> None:

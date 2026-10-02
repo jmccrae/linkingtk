@@ -51,6 +51,14 @@ from linkingtk.matchers import GreedyMatcher
 
 _SEED = 20260827
 _TOP_K = [1, 5]
+_RAGANATO_NAMES = {
+    "raganato_semeval2007": "SemEval-2007",
+    "raganato_senseval2": "Senseval-2",
+    "raganato_senseval3": "Senseval-3",
+    "raganato_semeval2013": "SemEval-2013",
+    "raganato_semeval2015": "SemEval-2015",
+    "raganato_ALL": "ALL",
+}
 
 
 def _sample(
@@ -176,6 +184,7 @@ def wsd_runs(
     mentions, senses, ground_truth = UfsacDataset(source=str(ufsac_path)).load()
     mentions, ground_truth = _sample(mentions, ground_truth, max_mentions)
     blocking = WordNetPosFilter(ExactMatch(top_k=50))
+    dataset_name = _RAGANATO_NAMES.get(ufsac_path.stem.removesuffix(".xml"), ufsac_path.stem)
 
     def baseline() -> EvaluationReport:
         # WordNet lists senses most-frequent first; decreasing scores keep that order.
@@ -193,13 +202,13 @@ def wsd_runs(
         return _report_from_scores(scores, ground_truth)
 
     return [
-        BenchmarkRun("WSD", "MVP", "Most frequent sense", "SemEval-2007", baseline),
+        BenchmarkRun("WSD", "MVP", "Most frequent sense", dataset_name, baseline),
         *(
             BenchmarkRun(
                 "WSD",
                 "Decision model",
                 f"KevLinker ({label}, {qt})",
-                "SemEval-2007",
+                dataset_name,
                 partial(kev, qt),
             )
             for qt in question_types
@@ -230,6 +239,12 @@ def main() -> None:
 
     client = KevClient(args.kev_url)
     client.health()
+    # Print what is actually being served: a port collision once pointed a
+    # run at a different service entirely.
+    for model in client.models():
+        print(
+            f"Kev server at {args.kev_url} serves run={model.get('run')} base={model.get('base')}"
+        )
 
     runs: list[BenchmarkRun] = []
     if args.task in ("el", "both"):

@@ -227,6 +227,13 @@ class TestWindowedContext:
 class _StubHandler(BaseHTTPRequestHandler):
     requests: list[dict[str, Any]] = []
 
+    def do_GET(self) -> None:  # noqa: N802 -- BaseHTTPRequestHandler's API
+        payload = json.dumps({"models": [{"name": "kev-latest", "run": "runs/x"}]}).encode()
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_POST(self) -> None:  # noqa: N802 -- BaseHTTPRequestHandler's API
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         type(self).requests.append(
@@ -297,6 +304,9 @@ class TestKevClient:
                 "criteria": {"a": "first", "b": "second"},
             }
         }
+
+    def test_models_lists_served_run(self, stub_server: str) -> None:
+        assert KevClient(stub_server).models() == [{"name": "kev-latest", "run": "runs/x"}]
 
     def test_http_error_raises_kev_error(self, stub_server: str) -> None:
         with pytest.raises(KevError, match="422"):
