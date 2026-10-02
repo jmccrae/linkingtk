@@ -5,6 +5,7 @@ from linkingtk.blocking.embedding import EmbeddingSimilarityBlocker
 from linkingtk.blocking.exact import ExactMatch
 from linkingtk.blocking.label_overlap import LabelOverlap
 from linkingtk.blocking.negative_sampling import sample_hard_negatives
+from linkingtk.blocking.pos import WordNetPosFilter
 
 __all__ = [
     "BlockingStrategy",
@@ -12,4 +13,5 @@ __all__ = [
     "LabelOverlap",
     "EmbeddingSimilarityBlocker",
     "sample_hard_negatives",
+    "WordNetPosFilter",
 ]

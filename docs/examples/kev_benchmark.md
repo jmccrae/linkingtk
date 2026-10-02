@@ -140,5 +140,6 @@ a verb mention like "play" gets its noun senses first. The first-candidate
 SemEval-2007, far below the usual ~0.54 for that split. Filtering
 candidates by the mention's Penn Treebank tag (UFSAC provides it as
 `properties["pos"]`) gives **0.536**, in line with the expected value.
-The benchmark script does this with a small `_SamePos` blocking wrapper.
+The benchmark script does this with the
+[`WordNetPosFilter`][linkingtk.blocking.pos.WordNetPosFilter] blocking wrapper.
 The other WSD benchmarks in this repo don't filter by POS.

@@ -11,3 +11,5 @@
 ::: linkingtk.blocking.embedding
 
 ::: linkingtk.blocking.negative_sampling
+
+::: linkingtk.blocking.pos

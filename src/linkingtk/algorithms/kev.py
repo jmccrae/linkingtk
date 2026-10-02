@@ -39,7 +39,7 @@ from linkingtk.utils.graph import Graph
 
 logger = logging.getLogger("linkingtk")
 
-__all__ = ["KevClient", "KevError", "KevLinker", "QuestionType"]
+__all__ = ["KevClient", "KevError", "KevLinker", "QuestionType", "kev_choice_records"]
 
 QuestionType = Literal["noul", "choice"]
 
@@ -254,6 +254,96 @@ def _candidate_question(source: Entity, candidate: Entity, task: Task) -> str:
     return _QUESTIONS[task].format(surface=_mention_surface(source), candidate=_describe(candidate))
 
 
+def _option_name(index: int) -> str:
+    return f"option {index + 1}"
+
+
+def _choice_question(
+    source: Entity, candidates: list[Entity], task: Task, window_words: int
+) -> tuple[str, str, dict[str, str]]:
+    """`(state, instructions, options)` for one choice question over `candidates`.
+
+    Shared by [KevLinker][linkingtk.algorithms.kev.KevLinker] and
+    [kev_choice_records][linkingtk.algorithms.kev.kev_choice_records], so
+    fine-tuning data matches what the linker sends at inference exactly.
+    """
+    options = {
+        _option_name(index): _describe(candidate)
+        for index, candidate in enumerate(candidates[:_MAX_CHOICE_OPTIONS])
+    }
+    state = _source_state(source, task, window_words)
+    instructions = _CHOICE_QUESTIONS[task].format(surface=_mention_surface(source))
+    return state, instructions, options
+
+
+def kev_choice_records(
+    dataset1: list[Entity],
+    dataset2: list[Entity] | EntitySource,
+    ground_truth: list[tuple[str, str]],
+    blocking: BlockingStrategy = DEFAULT_BLOCKING,
+    task: Task = "el",
+    context_window: int = 50,
+) -> list[dict[str, Any]]:
+    """Labelled choice records for fine-tuning a Kev model with `kev.train --data`.
+
+    Each source entity with at least two blocked candidates, one of them
+    gold, becomes one record: the same state, instructions and options
+    `KevLinker(question_type="choice")` would send, plus the gold option's
+    name as `label`. Write the records one JSON object per line.
+
+    Sources whose gold target isn't among their candidates, or with fewer
+    than two candidates (nothing to choose), are skipped. When a source has
+    several gold targets (some WSD instances), the first one in candidate
+    order is the label. Candidates beyond Kev's 255-option limit are
+    dropped, so a gold target past it is skipped too.
+
+    Args:
+        dataset1: Source entities (e.g. mentions).
+        dataset2: Target entities or an `EntitySource`.
+        ground_truth: `(source_id, target_id)` gold pairs.
+        blocking: Candidate generation; use the same strategy as at
+            inference.
+        task: Selects the wording, as for `KevLinker`.
+        context_window: Words of mention context kept on each side, as for
+            `KevLinker`.
+
+    Returns:
+        One `{"state", "questions": {"q": {"type": "choice", "instructions",
+        "criteria", "label"}}}` dict per usable source.
+    """
+    gold: dict[str, set[str]] = defaultdict(set)
+    for source_id, target_id in ground_truth:
+        gold[source_id].add(target_id)
+    candidates: dict[str, list[Entity]] = defaultdict(list)
+    sources: dict[str, Entity] = {}
+    seen: set[tuple[str, str]] = set()
+    for entity1, entity2 in blocking.candidate_pairs(dataset1, dataset2):
+        sources[entity1.id] = entity1
+        if (entity1.id, entity2.id) not in seen:
+            seen.add((entity1.id, entity2.id))
+            candidates[entity1.id].append(entity2)
+
+    records: list[dict[str, Any]] = []
+    for source_id, source_candidates in candidates.items():
+        kept = source_candidates[:_MAX_CHOICE_OPTIONS]
+        label = next(
+            (i for i, candidate in enumerate(kept) if candidate.id in gold[source_id]), None
+        )
+        if label is None or len(kept) < 2:
+            continue
+        state, instructions, options = _choice_question(
+            sources[source_id], kept, task, context_window
+        )
+        question = {
+            "type": "choice",
+            "instructions": instructions,
+            "criteria": options,
+            "label": _option_name(label),
+        }
+        records.append({"state": state, "questions": {"q": question}})
+    return records
+
+
 class KevLinker(BaseLinker):
     """Scores blocked candidates with Kev `noul` (pairwise) or `choice` questions.
 
@@ -388,12 +478,9 @@ class KevLinker(BaseLinker):
                 len(candidates),
                 _MAX_CHOICE_OPTIONS,
             )
-        options = {
-            f"option {index + 1}": _describe(candidate)
-            for index, candidate in enumerate(candidates[:_MAX_CHOICE_OPTIONS])
-        }
-        state = _source_state(source, self.task, self.context_window)
-        instructions = _CHOICE_QUESTIONS[self.task].format(surface=_mention_surface(source))
+        state, instructions, options = _choice_question(
+            source, candidates, self.task, self.context_window
+        )
         self.total_requests += 1
         try:
             probabilities = self.client.ask_choice(state, instructions, options)
@@ -402,7 +489,7 @@ class KevLinker(BaseLinker):
             logger.warning("Kev request failed for %s: %s", source.id, error)
             probabilities = {}
         return [
-            (candidate.id, probabilities.get(f"option {index + 1}", 0.0))
+            (candidate.id, probabilities.get(_option_name(index), 0.0))
             for index, candidate in enumerate(candidates)
         ]
 
